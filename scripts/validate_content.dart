@@ -39,25 +39,18 @@
 import 'dart:convert';
 import 'dart:io';
 
-const validPhaseSlugs = {'phase-2', 'phase-3', 'phase-4'};
-const validSubjectSlugs = {
-  'english',
-  'mathematics',
-  'general-science',
-  'islamiat-nazra-quran',
-  'ict-in-education',
-  'classroom-management-assessment',
-  'educational-psychology',
-  'curriculum-and-instruction',
-};
-const validQuestionTypes = {'mcq', 'short', 'long'};
-const validQualityStatuses = {
-  'VERIFIED',
-  'QUESTIONABLE',
-  'PAPER_ERROR',
-  'OCR_UNCERTAIN',
-  'ANSWER_UNCERTAIN',
-};
+import 'package:induction_program_past_papers/core/constants/app_constants.dart';
+import 'package:induction_program_past_papers/core/validation/question_numbering.dart';
+
+// Single source of truth: these come from the same lib/core/constants and
+// lib/core/validation the Flutter app itself uses (AppConstants,
+// QuestionNumberingValidator), rather than a second, hand-maintained copy
+// that could silently drift from the app's own rules. If a phase/subject
+// slug or numbering rule ever changes, it changes here automatically too.
+final validPhaseSlugs = AppConstants.phaseSlugs.toSet();
+final validSubjectSlugs = AppConstants.subjectSlugs.toSet();
+final validQuestionTypes = QuestionType.values.map((t) => t.dbValue).toSet();
+final validQualityStatuses = QualityStatus.values.map((q) => q.dbValue).toSet();
 
 class ValidationError {
   final String file;
@@ -159,7 +152,6 @@ void _validateFile(File file, List<ValidationError> errors, Set<String> seenPape
     return;
   }
 
-  final seenQuestionKeys = <String>{};
   for (final rawSection in sections) {
     if (rawSection is! Map<String, dynamic>) {
       errors.add(ValidationError(path, 'Section entry is not an object.'));
@@ -172,8 +164,28 @@ void _validateFile(File file, List<ValidationError> errors, Set<String> seenPape
           path, 'Section $sectionCode has no questions.', critical: false));
       continue;
     }
+
+    // Duplicate/gap detection is not re-implemented here — see
+    // QuestionNumberingValidator, the one canonical place for this rule,
+    // also used live by the admin Section Editor and by
+    // PaperQualityChecker's paper-wide quality report.
+    final numbers = questions
+        .whereType<Map<String, dynamic>>()
+        .map((q) => q['question_number'])
+        .whereType<num>()
+        .map((n) => n.toInt())
+        .toList();
+    final numberingReport = QuestionNumberingValidator.check(numbers);
+    for (final issue in numberingReport.issues) {
+      errors.add(ValidationError(
+        path,
+        'Section $sectionCode: ${issue.message}',
+        critical: issue.severity == NumberingIssueSeverity.error,
+      ));
+    }
+
     for (final rawQuestion in questions) {
-      _validateQuestion(path, sectionCode, rawQuestion, errors, seenQuestionKeys);
+      _validateQuestion(path, sectionCode, rawQuestion, errors);
     }
   }
 }
@@ -183,7 +195,6 @@ void _validateQuestion(
   String sectionCode,
   dynamic rawQuestion,
   List<ValidationError> errors,
-  Set<String> seenQuestionKeys,
 ) {
   if (rawQuestion is! Map<String, dynamic>) {
     errors.add(ValidationError(path, 'Question entry in section $sectionCode is not an object.'));
@@ -200,11 +211,6 @@ void _validateQuestion(
 
   if (questionNumber == null || questionNumber is! num) {
     errors.add(ValidationError(path, '$label: missing/invalid question_number.'));
-  } else {
-    final key = '$sectionCode::$questionNumber';
-    if (!seenQuestionKeys.add(key)) {
-      errors.add(ValidationError(path, '$label: duplicate question_number in this section.'));
-    }
   }
 
   if (questionType == null || !validQuestionTypes.contains(questionType)) {

@@ -58,7 +58,7 @@ foundation from prior sessions holds.
 
 ## Testing posture
 
-75 tests in `test/unit/` + `test/widget_test.dart`, all passing, all
+88 tests in `test/unit/` + `test/widget_test.dart`, all passing, all
 running without a live backend (pure logic + one widget-boot smoke test).
 What's covered:
 
@@ -67,8 +67,9 @@ What's covered:
 - Question-save validation and answer-discrepancy resolution (`question_validation_test.dart`)
 - Paper status transitions, the quality gate, and status presentation labels (`paper_status_test.dart`)
 - Admin paper search/filter/sort (`paper_filter_test.dart`)
-- **Numbering duplicate/gap detection** (`question_numbering_test.dart`, new)
-- **Reorder-and-renumber, id preservation, multi-step reordering** (`question_reorder_test.dart`, new)
+- Numbering duplicate/gap detection (`question_numbering_test.dart`)
+- Reorder-and-renumber, id preservation, multi-step reordering (`question_reorder_test.dart`)
+- Bulk-import JSON validation — phase/subject slugs, year-field rejection, numbering, MCQ/answer/quality rules (`content_import_validation_test.dart`)
 
 What's explicitly not covered by `flutter test`, and why: RLS/non-admin
 rejection requires a live Supabase project to exercise for real — that's
@@ -76,10 +77,14 @@ a property of the migrations, verified by reading them, not by an
 automated test in this repo. See `CLAUDE.md` "Testing Rules" for the same
 statement, kept in one place rather than repeated inconsistently.
 
-## What changed this session
+## What changed since the last audit
 
-Everything under "question reordering" and "PDF export"/"content
-coverage" in `docs/PRODUCTION_FEATURE_AUDIT.md`, plus these three
-documentation files. No prior feature was removed, rewritten, or had its
-behavior changed — only additions, per the explicit "do not rebuild"
+Question reordering, PDF export, Content Coverage, and — most recently —
+the in-app bulk JSON importer (`/admin/import`, backed by
+`ContentImportValidator`) plus `scripts/validate_content.dart`'s refactor
+onto the app's own `AppConstants`/`QuestionNumberingValidator` instead of a
+second hand-maintained copy of the same rules. See
+`docs/PRODUCTION_FEATURE_AUDIT.md` for the full feature-by-feature list.
+No prior feature was removed, rewritten, or had its behavior changed —
+only additions, per the explicit "do not rebuild"
 instruction.

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/validation/content_import_validation.dart';
 import '../../core/validation/paper_status.dart';
 import '../../core/validation/question_validation.dart';
 import '../models/admin_dashboard_stats.dart';
@@ -57,6 +58,139 @@ class AdminRepository {
     final paper = Paper.fromJson(row);
     await _logAudit(action: 'CREATE', tableName: 'papers', recordId: paper.id, after: row);
     return paper;
+  }
+
+  /// Bulk-imports one paper's sections/questions/options from JSON matching
+  /// the shape documented in `docs/CONTENT_IMPORT_GUIDE.md` — the in-app
+  /// counterpart to `scripts/import_content.dart`. Unlike that script, this
+  /// runs as the signed-in admin's own session (gated by the same
+  /// admin-write RLS every other admin write goes through), never a
+  /// service-role key.
+  ///
+  /// Re-validates with [ContentImportValidator] regardless of any
+  /// client-side check the caller already did — a critical error always
+  /// blocks the import, never just a warning in the UI. If a paper already
+  /// exists for this phase/subject slot, its sections (and their
+  /// questions/options, via cascade) are replaced with the imported
+  /// content — if that paper was VERIFIED/PUBLISHED, the
+  /// invalidate_verification_on_content_change trigger
+  /// (006_admin_workflow.sql) demotes it to UNDER_REVIEW automatically,
+  /// same as any other edit; importing never sets a paper straight to
+  /// PUBLISHED.
+  Future<Paper> importPaperFromJson({
+    required String phaseId,
+    required String subjectId,
+    required Map<String, dynamic> paperJson,
+  }) async {
+    final report = ContentImportValidator.validate(paperJson);
+    if (report.hasCriticalErrors) {
+      throw AppException(
+        'Import blocked by ${report.errors.length} critical error(s):\n'
+        '${report.errors.map((e) => '• ${e.message}').join('\n')}',
+      );
+    }
+
+    final existing = await SupabaseService.client
+        .from('papers')
+        .select('id')
+        .eq('phase_id', phaseId)
+        .eq('subject_id', subjectId)
+        .maybeSingle();
+
+    final paperFields = {
+      'title': paperJson['title'],
+      'cadre': paperJson['cadre'],
+      'total_marks': paperJson['total_marks'],
+      'duration_minutes': paperJson['duration_minutes'],
+    };
+
+    String paperId;
+    if (existing != null) {
+      paperId = existing['id'] as String;
+      await SupabaseService.client.from('papers').update(paperFields).eq('id', paperId);
+      // Sections cascade-delete their questions/options — a re-import
+      // fully replaces prior content for this slot rather than appending.
+      await SupabaseService.client.from('paper_sections').delete().eq('paper_id', paperId);
+    } else {
+      final row = await SupabaseService.client
+          .from('papers')
+          .insert({
+            'phase_id': phaseId,
+            'subject_id': subjectId,
+            ...paperFields,
+            'content_status': 'DRAFT',
+            'verification_status': 'DRAFT',
+          })
+          .select('id')
+          .single();
+      paperId = row['id'] as String;
+    }
+
+    var sectionOrder = 0;
+    for (final rawSection in paperJson['sections'] as List) {
+      final section = rawSection as Map<String, dynamic>;
+      final sectionRow = await SupabaseService.client
+          .from('paper_sections')
+          .insert({
+            'paper_id': paperId,
+            'section_name': section['section_name'],
+            'section_code': section['section_code'],
+            'marks': section['marks'],
+            'instructions': section['instructions'],
+            'display_order': sectionOrder++,
+          })
+          .select('id')
+          .single();
+      final sectionId = sectionRow['id'] as String;
+
+      var questionOrder = 0;
+      for (final rawQuestion in (section['questions'] as List? ?? const [])) {
+        final question = rawQuestion as Map<String, dynamic>;
+        final questionRow = await SupabaseService.client
+            .from('questions')
+            .insert({
+              'paper_section_id': sectionId,
+              'question_number': question['question_number'],
+              'question_type': question['question_type'],
+              'question_text': question['question_text'],
+              'marks': question['marks'],
+              'original_marked_option': question['original_marked_option'],
+              'verified_answer': question['verified_answer'],
+              'verification_status': question['verification_status'] ?? 'VERIFIED',
+              'explanation': question['explanation'],
+              'quality_status': question['quality_status'],
+              'quality_note': question['quality_note'],
+              'display_order': questionOrder++,
+            })
+            .select('id')
+            .single();
+        final questionId = questionRow['id'] as String;
+
+        if (question['question_type'] == 'mcq') {
+          var optionOrder = 0;
+          for (final rawOption in (question['options'] as List? ?? const [])) {
+            final option = rawOption as Map<String, dynamic>;
+            await SupabaseService.client.from('question_options').insert({
+              'question_id': questionId,
+              'option_label': option['option_label'],
+              'option_text': option['option_text'],
+              'is_verified_correct': option['is_verified_correct'] ?? false,
+              'display_order': optionOrder++,
+            });
+          }
+        }
+      }
+    }
+
+    await _logAudit(
+      action: 'IMPORT',
+      tableName: 'papers',
+      recordId: paperId,
+      after: {'title': paperJson['title'], 'sections': (paperJson['sections'] as List).length},
+    );
+
+    final row = await SupabaseService.client.from('papers').select().eq('id', paperId).single();
+    return Paper.fromJson(row);
   }
 
   Future<Paper> updatePaper({

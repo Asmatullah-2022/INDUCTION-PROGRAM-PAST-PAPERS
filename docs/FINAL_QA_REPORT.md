@@ -1,9 +1,11 @@
 # Final QA Report
 
-Run results for this session's changes (question reordering + live
-numbering validation, PDF export, Content Coverage screen, audit docs).
-See `docs/PRODUCTION_FEATURE_AUDIT.md` for feature-completeness and
-`docs/PROJECT_AUDIT.md` for the architecture/security narrative.
+Run results as of the latest changes (question reordering + live
+numbering validation, PDF export, Content Coverage screen, in-app bulk
+JSON import, and `scripts/validate_content.dart`'s move onto shared
+validation). See `docs/PRODUCTION_FEATURE_AUDIT.md` for
+feature-completeness and `docs/PROJECT_AUDIT.md` for the
+architecture/security narrative.
 
 ## flutter analyze
 
@@ -22,11 +24,11 @@ opportunistically.
 ## flutter test
 
 ```
-75 tests, all passing (0 failures)
+88 tests, all passing (0 failures)
 ```
 
-55 tests carried over unchanged from the prior session, plus 20 new this
-session:
+55 tests carried over from before the reordering work, plus 33 added
+since:
 
 - `test/unit/question_numbering_test.dart` — 9 tests (sequential pass,
   duplicate detection, gap detection, gap-is-warning-not-error,
@@ -35,8 +37,12 @@ session:
 - `test/unit/question_reorder_test.dart` — 10 tests (renumbering, order
   preservation, id preservation, move-to-end, move-to-front, no-op move,
   multi-step reordering, post-reorder validity)
-- 1 new test added to `test/unit/paper_status_test.dart` (empty
+- 1 test added to `test/unit/paper_status_test.dart` (empty
   question_text is a critical error)
+- `test/unit/content_import_validation_test.dart` — 13 tests (valid
+  paper passes; invalid phase/subject slug, year field, missing title, no
+  sections, empty section, MCQ with no correct option, duplicate/gap
+  numbering, quality_note requirement, missing verified_answer)
 
 ## scripts/validate_content.dart
 

@@ -120,6 +120,14 @@ class AdminDashboardScreen extends ConsumerWidget {
                       ),
                       const Divider(height: 1),
                       ListTile(
+                        leading: const Icon(Icons.file_upload_outlined),
+                        title: const Text('Import Content'),
+                        subtitle: const Text('Bulk-import a paper from a validated JSON file'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/admin/import'),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
                         leading: const Icon(Icons.rule_folder_outlined),
                         title: const Text('Review Questionable Questions'),
                         trailing: const Icon(Icons.chevron_right),

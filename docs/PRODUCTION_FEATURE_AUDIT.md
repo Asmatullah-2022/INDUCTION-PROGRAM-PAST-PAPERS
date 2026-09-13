@@ -16,8 +16,9 @@ feature area. Classifications:
   perform the step (no Android SDK, egress policy blocks the SDK
   download); the code itself has no known blocker.
 
-This file reflects the codebase as of the "question reordering + live
-duplicate/gap detection" change. Re-run the greps below yourself if this
+This file reflects the codebase through the in-app bulk JSON import
+feature (`/admin/import`) and the `scripts/validate_content.dart`
+refactor onto shared validation. Re-run the greps below yourself if this
 drifts — they're exactly how this audit was produced:
 
 ```bash
@@ -69,16 +70,16 @@ grep -rliE "pdf.*generat|generat.*pdf|printing" lib/ pubspec.yaml
 | Upload/replace original file to Storage | COMPLETED |
 | Section CRUD | COMPLETED |
 | Question CRUD (MCQ/short/long, MCQ options editor) | COMPLETED |
-| **Drag-to-reorder questions with auto-renumbering** | COMPLETED (this change — `ReorderableListView`, save/cancel/undo, unsaved-changes indicator) |
-| **Live duplicate/gap numbering detection** | COMPLETED (this change — `QuestionNumberingValidator`, shared with `PaperQualityChecker`, not duplicated) |
+| Drag-to-reorder questions with auto-renumbering | COMPLETED (`ReorderableListView`, save/cancel/undo, unsaved-changes indicator) |
+| Live duplicate/gap numbering detection | COMPLETED (`QuestionNumberingValidator`, shared with `PaperQualityChecker` and both importers, not duplicated) |
 | Paper-level quality report (score, ✗ errors, ⚠ warnings) | COMPLETED |
 | Status workflow (Draft→Needs Review→Verified→Published, +Archive/Restore) | COMPLETED, server-enforced (`admin_transition_paper_status` RPC) |
 | Auto-invalidation of verification on content edit | COMPLETED (DB trigger, not app-level) |
 | Search/filter/sort on Manage Papers | COMPLETED |
-| Content Coverage screen (all 24 slots + status) | COMPLETED (this change) |
+| Content Coverage screen (all 24 slots + status) | COMPLETED |
 | Audit log | COMPLETED (write-side for admin actions + automatic transitions; read-only list screen) |
 | Dashboard real counts (papers by status, subjects, questions, users) | COMPLETED |
-| Bulk/CSV question import from the UI (vs. the scripted JSON importer) | NOT IMPLEMENTED — `scripts/import_content.dart` covers scripted import; there is no in-app bulk uploader |
+| Bulk JSON import from the UI (vs. the scripted importer) | COMPLETED — **Admin → Import Content** (`/admin/import`), picks a JSON file, validates with `ContentImportValidator`, imports as the signed-in admin via RLS (no service-role key) |
 
 ## Content validation & import pipeline
 
@@ -86,7 +87,7 @@ grep -rliE "pdf.*generat|generat.*pdf|printing" lib/ pubspec.yaml
 |---|---|
 | `scripts/validate_content.dart` (phase/subject/type/quality/MCQ/answer/marks/numbering/year-field checks) | COMPLETED |
 | `scripts/import_content.dart` (JSON → DRAFT papers via PostgREST) | COMPLETED |
-| Shared validation between Section Editor, Review screen, and (conceptually) the importer | PARTIALLY COMPLETED — `QuestionNumberingValidator` and `QuestionValidation` are the one canonical Dart implementation used by both the Section Editor and `PaperQualityChecker`. `scripts/validate_content.dart` is a **separate Dart entrypoint** (it validates raw JSON before any database row exists) and re-implements the same rules in its own file rather than importing the app's `lib/core/validation/` — that's a real gap: the two are kept in sync by intent and code review, not by a shared library, because the script currently has no dependency on the Flutter package's `lib/`. If they drift, `validate_content.dart` is the one gating actual imports, so it's the one that must be fixed first if a rule changes there. |
+| Shared validation between Section Editor, Review screen, and the importer(s) | COMPLETED — `scripts/validate_content.dart` now imports `AppConstants` and `QuestionNumberingValidator` directly from the app package (`package:induction_program_past_papers/...`) for its phase/subject-slug sets, question-type/quality-status sets, and duplicate/gap detection, instead of a second hand-maintained copy; it also gained gap (missing-number) detection it previously lacked. `ContentImportValidator` (the in-app importer's validator) shares the same `AppConstants`/`QuestionNumberingValidator` too. All three surfaces — Section Editor, `PaperQualityChecker`, and both importers — now go through the same two files for numbering rules. |
 
 ## Verification workflow
 
@@ -109,10 +110,10 @@ This is a genuinely large feature (chat UI, a backend proxy so no API key ever s
 | Area | Status |
 |---|---|
 | Original Paper PDF | COMPLETED — this is the uploaded source file itself, already viewable/shareable; nothing to "generate" |
-| MCQ Answer Key PDF | COMPLETED (this change — `PdfExportService`, export button on the Answer Key screen) |
-| Solved Short Questions PDF | COMPLETED (this change) |
-| Solved Long Questions PDF | COMPLETED (this change) |
-| Complete Solved Paper PDF | COMPLETED (this change) |
+| MCQ Answer Key PDF | COMPLETED (`PdfExportService`, export button on the Answer Key screen) |
+| Solved Short Questions PDF | COMPLETED |
+| Solved Long Questions PDF | COMPLETED |
+| Complete Solved Paper PDF | COMPLETED |
 | Generated PDFs show app name/phase/subject/title/section/questions/answers/verification status/generated date | COMPLETED — see `PdfExportService`, every field is read from `Paper`/`Question`, nothing invented |
 | Real exam content in an exported PDF | BLOCKED BY MISSING SOURCE PAPERS — exporting works today; there's nothing real to export yet |
 
@@ -152,7 +153,7 @@ This is a genuinely large feature (chat UI, a backend proxy so no API key ever s
 
 | Area | Status |
 |---|---|
-| Unit tests for scoring/validation/reorder/numbering logic | COMPLETED — 75 tests across `test/unit/`, all pure/no-network |
+| Unit tests for scoring/validation/reorder/numbering/import logic | COMPLETED — 88 tests across `test/unit/`, all pure/no-network |
 | Widget test (app boot) | COMPLETED |
 | RLS/non-admin-rejection enforcement test | NOT IMPLEMENTED — needs a live Supabase project; covered by code review of `002_rls.sql`/`006_admin_workflow.sql` instead, called out explicitly in `CLAUDE.md` |
 | Android build verification | BLOCKED BY ENVIRONMENT |

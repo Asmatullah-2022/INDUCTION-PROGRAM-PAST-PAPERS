@@ -144,7 +144,13 @@ ships:
   anywhere whose `quality_status` isn't `VERIFIED`, opening straight into
   the question editor above;
 - **Audit Log** (`/admin/audit-log`): every admin content write plus
-  automatic status transitions and verification invalidations.
+  automatic status transitions and verification invalidations;
+- **Content Coverage** (`/admin/coverage`): all 24 phase/subject slots at
+  a glance with their real status, including a Missing Source badge for
+  any slot with no paper yet;
+- **Import Content** (`/admin/import`): the in-app alternative to
+  `scripts/import_content.dart` — pick a paper JSON file, see its
+  validation report inline, import as DRAFT, no service-role key needed.
 
 All of this is a UX convenience only — see `CLAUDE.md` "Security Rules" for
 why the actual enforcement is server-side RLS and the

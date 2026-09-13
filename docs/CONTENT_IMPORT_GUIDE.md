@@ -131,6 +131,18 @@ If a paper already exists for that phase/subject slot (the `papers` table
 has a `unique (phase_id, subject_id)` constraint), the importer updates it
 in place rather than creating a duplicate.
 
+### Alternative: import one file from inside the app
+
+**Admin → Import Content** (`/admin/import`) does the same thing for one
+file at a time, from the app itself, as the signed-in admin — gated by
+the same RLS every other admin write goes through, with **no
+service-role key involved at all**. Pick the JSON file, review the
+validation report it shows inline (built from
+`ContentImportValidator`, the same rule set as `validate_content.dart`
+above), and tap **Import as Draft** once there are no critical errors.
+Prefer this for a single file; prefer the script above for importing many
+files at once or from CI.
+
 ## Step 3 — Attach the original file
 
 The importer does not upload the source PDF/image — do that from the

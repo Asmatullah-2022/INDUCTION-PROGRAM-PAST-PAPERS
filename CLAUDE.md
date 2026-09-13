@@ -96,9 +96,13 @@ the rules those guides must keep following, not the how-to.
 - Content flow: write source JSON under `content/phase_<N>/<subject>.json`
   → `dart run scripts/validate_content.dart content` (must pass with 0
   critical errors) → `dart run scripts/import_content.dart content
-  --url=... --service-key=...` (inserts as DRAFT) → human review → admin
-  explicitly sets `content_status = 'PUBLISHED'`. Never publish content
-  that hasn't passed through this pipeline.
+  --url=... --service-key=...` **or** the in-app **Admin → Import
+  Content** screen (`/admin/import`, no service-role key needed — runs as
+  the signed-in admin) → (either path inserts as DRAFT) → human review →
+  admin explicitly sets `content_status = 'PUBLISHED'`. Never publish
+  content that hasn't passed through this pipeline. Both import paths and
+  the Section Editor's live check all validate numbering through the same
+  `QuestionNumberingValidator` — don't add a fourth copy of that rule.
 - If a source paper for a phase/subject slot doesn't exist yet, leave it
   missing. Do not invent one. The correct UI/report language is "MISSING
   SOURCE PAPER — DO NOT PUBLISH", already implemented in the subject and

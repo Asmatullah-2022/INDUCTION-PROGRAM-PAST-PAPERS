@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/admin/admin_dashboard_screen.dart';
 import '../../features/admin/admin_audit_log_screen.dart';
 import '../../features/admin/admin_content_coverage_screen.dart';
+import '../../features/admin/admin_import_screen.dart';
 import '../../features/admin/admin_paper_detail_screen.dart';
 import '../../features/admin/admin_paper_review_screen.dart';
 import '../../features/admin/admin_paper_form_screen.dart';
@@ -161,6 +162,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/admin/coverage',
         builder: (context, state) => const AdminContentCoverageScreen(),
       ),
+      GoRoute(path: '/admin/import', builder: (context, state) => const AdminImportScreen()),
       GoRoute(path: '/admin/papers', builder: (context, state) => const AdminPapersScreen()),
       GoRoute(path: '/admin/papers/new', builder: (context, state) => const AdminPaperFormScreen()),
       GoRoute(
