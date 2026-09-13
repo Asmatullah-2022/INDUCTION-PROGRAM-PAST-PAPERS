@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
 
@@ -37,6 +38,15 @@ class AboutScreen extends StatelessWidget {
             'independently. Where a discrepancy exists between an original paper\'s '
             'marked answer and the academically verified answer, both are shown '
             'clearly with a quality-check indicator.',
+          ),
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => context.push('/privacy'),
+              icon: const Icon(Icons.privacy_tip_outlined, size: 18),
+              label: const Text('Privacy Policy'),
+            ),
           ),
         ],
       ),

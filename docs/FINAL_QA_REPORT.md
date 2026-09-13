@@ -1,130 +1,55 @@
 # Final QA Report
 
-Run results as of the latest pass (**Downloads Manager implementation +
-Privacy Policy/Play Store/Live-Supabase-test-plan documentation**), on
-top of every prior pass: N+1/pagination hardening
-(`docs/PERFORMANCE_AUDIT.md`), AI Teacher
-(`docs/AI_TEACHER_GUIDE.md`/`docs/AI_TEACHER_ARCHITECTURE.md`), and the
-production-readiness audit (`docs/REMAINING_WORK_AUDIT.md`,
-`docs/SECURITY_AUDIT.md`). This pass, unlike the immediately prior one,
-included real application code — the Downloads Manager — not only
-documentation.
+Run results as of the latest pass (**Privacy Policy hosting**), on top
+of every prior pass: N+1/pagination hardening, AI Teacher, the
+production-readiness audit, and the Downloads Manager. This pass added
+a production-ready static Privacy Policy page and wired its in-app
+entry points, but — per the explicit instruction not to pretend —
+**did not and cannot deploy it** from this sandbox.
 
-## 1. Completed features
+## WHAT WAS CHANGED
 
-- **Downloads Manager** (new this pass): a persistent
-  `DownloadsScreen` listing every locally-saved PDF (original paper,
-  MCQ answer key, solved short/long questions, complete solved paper),
-  each with paper title, phase/subject, document type, file size,
-  download date, and the paper's verification status at download time.
-  Open (via `Printing.layoutPdf`), Share (`Share.shareXFiles`), and
-  Delete (with confirmation) per record. Duplicate-download prevention
-  is structural (one record per paper+document-type; re-downloading
-  overwrites rather than duplicating). Missing/corrupted files are
-  detected and shown with a warning, Open/Share disabled, Delete still
-  available. Wired into all four export screens plus the original-paper
-  viewer, alongside (not replacing) the existing ephemeral Share action.
-- **Account deletion now clears local device state** — cached content
-  and all downloaded files, not just the server-side account.
-- Everything already COMPLETED in prior passes and re-verified, not
-  redone: N+1 fixes, server-side keyset pagination (Audit Log, Review
-  Questionable Questions), the `admin_dashboard_stats`/
-  `admin_reorder_questions` RPCs, AI Teacher's full capability set,
-  Stop Generation (client-side abandonment, documented), New
-  Conversation vs Clear Chat, Regenerate, discrepancy detection, the
-  independent-app disclaimer, and the entire content-validation/
-  admin-workflow pipeline.
-- **New documentation**: `docs/PRIVACY_POLICY.md`,
-  `docs/PLAY_STORE_LISTING.md`, `docs/LIVE_SUPABASE_TEST_PLAN.md` (all
-  new this pass) — see sections 6–9 below.
+- Created `privacy-policy.html` (repo root) — a self-contained,
+  mobile-friendly, dependency-free static page whose content matches
+  `docs/PRIVACY_POLICY.md` and the in-app Privacy Policy screen exactly.
+  No build step; open it directly in a browser to preview.
+- Added `.nojekyll` (repo root) so GitHub Pages, if enabled, serves
+  files as-is rather than attempting Jekyll processing.
+- Added a Privacy Policy link to the **About screen** (previously had
+  none) and a "By signing up, you agree to our Privacy Policy" link on
+  the **Sign Up screen** (previously had none) — both navigate to the
+  existing in-app `/privacy` route. The **Settings screen** already had
+  a Privacy Policy entry point from a prior pass; unchanged, and now
+  covered by a regression test.
+- Confirmed the **account deletion** entry point (Profile → Delete
+  Account) already exists, works as documented, and is now covered by
+  an automated widget test.
+- Added `docs/PRIVACY_POLICY_DEPLOYMENT.md` — exact deployment options
+  (GitHub Pages recommended, plus alternatives), verification steps,
+  where to enter the URL in Play Console, the account-deletion policy
+  requirement, and what stays blocked until deployment.
+- Updated `docs/PLAY_STORE_RELEASE_CHECKLIST.md`'s Privacy Policy row to
+  point at the new page/deployment doc and to use the literal
+  placeholder `PRIVACY_POLICY_URL_REQUIRED` until a real URL exists.
 
-## 2. Partial features
+## FILES CHANGED
 
-- **Play Store readiness** — Android configuration is READY; store
-  copy (short/long description) is READY as drafted text; every
-  Console-side action (screenshots, icon export, Data Safety form,
-  content rating, hosting the Privacy Policy URL, contact info) is
-  PENDING and cannot be completed from this codebase alone. See
-  `docs/PLAY_STORE_RELEASE_CHECKLIST.md`.
-- **Some quality-check rules deferred pending real content** (marks-
-  mismatch, OCR-corruption detection) — unchanged from the prior pass,
-  see `docs/REMAINING_WORK_AUDIT.md` §12.
+**New:**
+- `privacy-policy.html`
+- `.nojekyll`
+- `docs/PRIVACY_POLICY_DEPLOYMENT.md`
+- `test/widget/privacy_and_account_test.dart`
 
-## 3. Missing features
+**Modified:**
+- `lib/features/settings/about_screen.dart` — added the Privacy Policy link.
+- `lib/features/auth/screens/signup_screen.dart` — added the Privacy Policy link/notice.
+- `docs/PLAY_STORE_RELEASE_CHECKLIST.md` — Privacy Policy row updated.
 
-- **AI response streaming** and **true server-side Stop Generation
-  cancellation** — evaluated and explicitly not implemented; see
-  `docs/AI_TEACHER_ARCHITECTURE.md`.
-- **A VERIFIED_ANSWER "AI-answer promotion" pipeline** — not built by
-  design; would conflict with `CLAUDE.md`. See
-  `docs/REMAINING_WORK_AUDIT.md` §2–4.
-- **A network-fetched original-paper download that survives a signed-
-  URL expiry** — not applicable: original paper files are intentionally
-  public-read once PUBLISHED, so there is no signed URL to expire in the
-  first place (see `docs/SECURITY_AUDIT.md` "Download security").
+**Not touched**: any database, Edge Function, or other application
+logic — this pass was scoped entirely to the Privacy Policy hosting
+requirement.
 
-## 4. Security status
-
-**PASS, 0 CRITICAL findings** (unchanged from the prior pass, plus a
-new "Download security" section — PASS on every point: the Downloads
-Manager is never a separate authorization path, uses no signed URL
-because none is needed, and account deletion now clears local download
-state too). Full detail in `docs/SECURITY_AUDIT.md`. RLS enforcement
-itself remains **BLOCKED — LIVE TEST REQUIRED**: no live Supabase
-project exists in this sandbox; the full test matrix is documented in
-`docs/LIVE_SUPABASE_TEST_PLAN.md` (new this pass, expanded from the
-summary table in `SECURITY_AUDIT.md`) for execution once one exists.
-
-## 5. AI Teacher status
-
-**READY** for everything achievable without a live provider — unchanged
-from the prior pass; not touched this pass. See
-`docs/AI_TEACHER_ARCHITECTURE.md` for streaming/cancellation, and
-`docs/REMAINING_WORK_AUDIT.md` §5 for the full capability checklist.
-
-## 6. Downloads status
-
-**READY.** Implemented this pass in full: `DownloadRecord` model,
-`DownloadsService` (save/list/open-bytes/delete/clear-all, local
-SharedPreferences-backed index + app-documents-directory files),
-`DownloadsScreen` + `DownloadsNotifier`/`downloadsProvider`, wired into
-all four PDF-export screens and the original-paper viewer, plus a
-Settings entry point (`/downloads`). 14 new tests (9 unit + 5 widget),
-all passing. **Not built**: download progress percentage UI (the actual
-generation/fetch is fast enough in practice that a determinate progress
-bar wasn't judged worth the added state — the button shows a disabled/
-busy state implicitly via the async call, but there's no numeric
-percentage); this is a minor polish item, not a functional gap.
-
-## 7. Privacy Policy status
-
-**READY** as drafted content, **PENDING** hosting. `docs/
-PRIVACY_POLICY.md` (new) was written to exactly match the in-app
-Privacy Policy screen (`privacy_screen.dart`, also updated this pass to
-add AI Teacher and Downloads sections it was previously missing — a
-real gap found and fixed, not just documented) and the actual database
-schema. It requires a **publicly hosted URL** for Play Console — that
-hosting step is outside what this codebase can do.
-
-## 8. Play Store status
-
-**READY** (Android config + store copy) **/ PENDING** (every Console-
-side action). See `docs/PLAY_STORE_RELEASE_CHECKLIST.md` (updated this
-pass to the READY/PENDING/BLOCKED vocabulary) and `docs/
-PLAY_STORE_LISTING.md` (new — app name, short/long description with an
-explicit switch for whether real Phase II/III/IV content exists yet,
-category, and what never to claim).
-
-## 9. Supabase status
-
-Schema/RLS/Edge-Function review: **PASS** (0 CRITICAL, see
-`docs/SECURITY_AUDIT.md`). Live enforcement: **BLOCKED — LIVE TEST
-REQUIRED** (no live project in this sandbox; full test plan in `docs/
-LIVE_SUPABASE_TEST_PLAN.md`, new this pass). No new migration was
-needed this pass — the Downloads Manager touches no database table at
-all (it's local-device-only state).
-
-## 10. Test results
+## TEST RESULTS
 
 ### flutter analyze
 
@@ -133,24 +58,24 @@ all (it's local-device-only state).
 ```
 
 Same 10 pre-existing `info`-level notices as every prior session — **0
-errors**, including across every new file this pass.
+errors**.
 
 ### flutter test
 
 ```
-153 tests, all passing (0 failures)
+158 tests, all passing (0 failures)
 ```
 
-139 carried over, plus 14 new: `test/unit/downloads_service_test.dart`
-(9 tests — `DownloadRecord` id/JSON round-trip, an unrecognized
-document-type value throwing rather than silently mislabeling, every
-document type's label/dbValue uniqueness and inverse mapping,
-`DownloadsService.upsert`'s duplicate-download-prevention rule under
-three scenarios, and `formatFileSize`'s thresholds) and `test/widget/
-downloads_screen_test.dart` (5 tests — empty state, a populated list
-rendering every field, the missing-file warning with Open/Share
-effectively disabled, deleting a record after confirmation, and two
-document types for the same paper appearing as separate entries).
+153 carried over, plus 5 new in `test/widget/privacy_and_account_test.dart`:
+- About screen shows a Privacy Policy link that navigates to `/privacy`.
+- Settings screen's existing Privacy Policy tile navigates to `/privacy`
+  (regression coverage for previously-untested code) and its Downloads
+  tile navigates to `/downloads`.
+- Sign Up screen shows a Privacy Policy link that navigates to `/privacy`.
+- Profile screen shows a Delete Account entry point that opens the
+  confirmation dialog (scrolled into view first — the card sits below
+  the fold in a default test viewport, the same virtualization
+  consideration noted for other list-heavy screens in this project).
 
 ### scripts/validate_content.dart
 
@@ -164,56 +89,67 @@ Exit code 0.
 
 ### Post-implementation scan
 
-Grepped every file touched this pass for `TODO|FIXME|stub|placeholder|
-not implemented|lorem ipsum|sample question|demo paper|fake` and for
-real-secret patterns — zero matches beyond documentation references to
-variable/placeholder names (e.g. the literal instruction to replace
-`YOUR_SUPPORT_EMAIL`). No fake exam content, no fabricated years/dates/
-marks, was introduced.
+Grepped every file touched this pass for secrets and fabricated
+content — zero matches beyond the deliberate placeholder strings
+(`PRIVACY_POLICY_URL_REQUIRED`, `YOUR_SUPPORT_EMAIL`,
+`PRIVACY_CONTACT_EMAIL_REQUIRED`), which exist specifically to be
+replaced with real values before submission, not to be mistaken for
+real ones.
 
 ### Android build
 
 **BLOCKED BY ENVIRONMENT**, unchanged — no Android SDK in this sandbox.
-Not attempted.
+Not attempted (and not relevant to this pass, which touched no Android
+configuration).
 
-## 11. Build results
+## PRIVACY POLICY STATUS
 
-Not built — blocked by environment (§10 above, §12
-`docs/REMAINING_WORK_AUDIT.md`). `flutter analyze`/`flutter test` were
-run and pass; `flutter build appbundle`/`apk --release` were not
-attempted.
+**READY (content), NOT DEPLOYED (hosting).** The page is
+production-ready as written — mobile-friendly CSS, no external
+dependency, matches the app's actual data practices exactly (reviewed
+against the database schema and Edge Functions in the prior pass, and
+re-read this pass for consistency with the newly-added in-app links).
+It has not been opened in a live browser from a real deployed URL,
+because no such URL exists yet.
 
-## 12. Real paper status
+## DEPLOYMENT STATUS
 
-Unchanged. Still missing. Nothing fabricated this pass — the Downloads
-Manager was built and tested entirely against the existing (empty)
-content model and synthetic in-memory test fixtures, never real or
-invented exam content.
+**NOT DEPLOYED.** No hosting action was taken or could be taken from
+this sandbox (no Vercel/Netlify/GitHub Pages credentials or API access
+available here). `docs/PRIVACY_POLICY_DEPLOYMENT.md` documents the
+exact steps for a human with the right access to deploy it (GitHub
+Pages recommended, since this repository is already on GitHub) and how
+to verify the result once live.
 
-## 13. Remaining blockers
+## EXACT PUBLIC URL
 
-1. Real Phase II/III/IV source papers still missing.
-2. Android AAB/APK build unverified (no SDK).
-3. Live Supabase RLS/provider testing requires a real environment —
-   full plan documented (`docs/LIVE_SUPABASE_TEST_PLAN.md`), not
-   executed.
-4. AI response streaming and true server-side Stop Generation remain
-   unimplemented (deliberate evaluation, documented).
-5. A VERIFIED_ANSWER "AI-answer promotion" pipeline was not built
-   (deliberate, per `CLAUDE.md`).
-6. Play Console-side listing work not started (screenshots, icon
-   export, Data Safety form, content rating, hosted Privacy Policy URL,
-   contact info).
-7. Some content-dependent quality-check rules deferred pending real
-   content.
+**None. No URL has been deployed, so none is reported.** Do not treat
+any URL mentioned elsewhere in this repository's documentation as live
+unless `docs/PRIVACY_POLICY_DEPLOYMENT.md` has been updated to say a
+deployment actually happened.
 
-## 14. Exact next user action
+## REMAINING BLOCKERS
 
-**Host `docs/PRIVACY_POLICY.md`'s content at a real, public URL, and
-supply real Phase II/III/IV source papers (PDF/scans) through the
-existing import pipeline.** Nearly everything else buildable without
-those two things is now either done or explicitly, honestly documented
-as pending/blocked — the Downloads Manager gap flagged after the prior
-pass is now closed.
+1. **The Privacy Policy page itself is not hosted anywhere** — this is
+   the direct blocker for Play Store submission; see
+   `docs/PRIVACY_POLICY_DEPLOYMENT.md` for exact next steps.
+2. Real Phase II/III/IV source papers still missing (unchanged).
+3. Android AAB/APK build unverified — no SDK (unchanged).
+4. Live Supabase RLS/provider testing requires a real environment
+   (unchanged — plan documented in `docs/LIVE_SUPABASE_TEST_PLAN.md`).
+5. Every other Play Console-side listing action (screenshots, icon
+   export, Data Safety form, content rating, contact info) remains
+   PENDING, independent of the Privacy Policy blocker (unchanged).
 
-**REAL SOURCE PAPERS ARE STILL REQUIRED. NO EXAM CONTENT WAS FABRICATED.**
+## NEXT ACTION FOR USER
+
+**Deploy `privacy-policy.html` using one of the options in
+`docs/PRIVACY_POLICY_DEPLOYMENT.md` (GitHub Pages is the fastest, since
+this repo is already on GitHub and needs no new account), verify it
+loads over HTTPS, then paste that real URL into Play Console's Privacy
+Policy field** — replacing the `PRIVACY_POLICY_URL_REQUIRED` placeholder
+in `docs/PLAY_STORE_RELEASE_CHECKLIST.md` with the same URL for the
+project's own records.
+
+**REAL SOURCE PAPERS ARE STILL REQUIRED. NO EXAM CONTENT WAS FABRICATED.
+NO PRIVACY POLICY URL HAS BEEN INVENTED OR CLAIMED AS DEPLOYED.**

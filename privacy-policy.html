@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Induction Program Past Papers</title>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --card: #ffffff;
+    --text: #1a1c1e;
+    --muted: #55585c;
+    --accent: #0f6b5c;
+    --border: #e2e4e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101214;
+      --card: #17191c;
+      --text: #eceef0;
+      --muted: #a8adb3;
+      --accent: #4fd6bd;
+      --border: #2a2d31;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+  }
+  header {
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+  }
+  header p.meta {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-size: 1.05rem;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  p { margin: 0 0 10px; }
+  p:last-child { margin-bottom: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    margin: 8px 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--muted); font-weight: 600; }
+  .disclaimer {
+    border-color: var(--accent);
+  }
+  .disclaimer h2 { color: var(--text); }
+  code {
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+  footer {
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-align: center;
+    margin-top: 24px;
+  }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Induction Program Past Papers · Last reviewed against the app's actual code and database schema on 2026-09-13</p>
+  </header>
+
+  <div class="card disclaimer">
+    <h2>Who this app is</h2>
+    <p>Induction Program Past Papers is an independent educational preparation app for teachers, teacher aspirants, and students preparing for the Khyber Pakhtunkhwa Teacher Induction Program exams. Unless explicitly stated otherwise, this app is <strong>not</strong> an official government application and is not affiliated with, endorsed by, or operated by any government department.</p>
+  </div>
+
+  <div class="card">
+    <h2>Data we collect</h2>
+    <table>
+      <tr><th>Category</th><th>What, exactly</th><th>Why</th></tr>
+      <tr><td>Account information</td><td>Full name, email address, mobile number, district — collected at sign-up via Supabase Authentication.</td><td>To create and identify your account.</td></tr>
+      <tr><td>Bookmarks</td><td>Which questions/papers you've bookmarked.</td><td>So your bookmarks sync across sessions/devices.</td></tr>
+      <tr><td>Practice history</td><td>Practice attempts and answers you submit in Practice Mode.</td><td>To score attempts and track your progress.</td></tr>
+      <tr><td>Progress</td><td>Per-phase/subject attempted/correct/incorrect counts.</td><td>To show your own progress over time.</td></tr>
+      <tr><td>AI Teacher conversations</td><td>Messages you send to AI Teacher and its responses, tied to your account.</td><td>So you can revisit past conversations, and to enforce a daily request limit (a count only, not the content) so the feature stays available for everyone.</td></tr>
+      <tr><td>Downloaded files</td><td><strong>Not collected by us at all.</strong> Downloaded PDFs are saved only on your device's own local storage.</td><td>N/A — stays entirely on your device; we do not track what you download.</td></tr>
+    </table>
+    <p>We do <strong>not</strong> collect payment information (the app has no payments), advertising identifiers, precise location, or contacts, and we use no third-party analytics or advertising SDK.</p>
+  </div>
+
+  <div class="card">
+    <h2>Authentication &amp; Supabase</h2>
+    <p>Account creation, sign-in, and password reset are handled by Supabase Authentication. Your account data, bookmarks, practice history, progress, and AI Teacher conversations are stored in a Supabase (PostgreSQL) database with Row Level Security enabled on every table that holds user data — you can only read or write your own rows; this is enforced by the database itself, not just by the app's screens.</p>
+  </div>
+
+  <div class="card">
+    <h2>AI Teacher</h2>
+    <p>AI Teacher's responses always distinguish AI-generated content from the app's own independently verified answers with an explicit label — an AI response is never presented as an official verified answer. AI Teacher never receives your name, email, mobile number, or district; only the message you type and, if you opened it from a specific question, that question's own already-public content. The server-side function that powers AI Teacher does not log the content of your prompts or responses — only error events, which never include your message content or any credential.</p>
+  </div>
+
+  <div class="card">
+    <h2>Logging &amp; error monitoring</h2>
+    <p>The app's backend (Supabase Edge Functions) logs operational error events for reliability purposes — e.g. that a request failed and why, at a technical level. These logs do not include your AI Teacher message content, password, or any credential. We do not use a separate third-party crash-reporting or analytics SDK in the app itself.</p>
+  </div>
+
+  <div class="card">
+    <h2>Downloaded files</h2>
+    <p>Files you download (answer keys, solved questions, original papers) are saved only in your device's own local app storage, listed in the app's Downloads screen. We do not track, upload, or receive any information about what you download.</p>
+  </div>
+
+  <div class="card">
+    <h2>Data retention</h2>
+    <p>Your data is retained for as long as your account exists. There is no automatic expiry on bookmarks, practice history, progress, or AI Teacher conversations — they persist until you delete them individually where the app supports that, or until you delete your account entirely.</p>
+  </div>
+
+  <div class="card">
+    <h2>Account deletion</h2>
+    <p>You may delete your account at any time from <strong>Profile → Delete Account</strong> in the app. This permanently and irreversibly removes:</p>
+    <p>
+      • Your profile (name, email, mobile number, district)<br>
+      • Your bookmarks, practice attempts/answers, and progress<br>
+      • Your AI Teacher conversations and messages (removed automatically as part of account deletion via the database's own referential rules)<br>
+      • Your authentication account itself
+    </p>
+    <p>The app also clears locally cached content and any files you've downloaded from your device at the same time. There is currently no separate "request deletion by email" process — deletion happens immediately and directly from within the app, which is the account-deletion method Google Play requires apps to offer.</p>
+  </div>
+
+  <div class="card">
+    <h2>Your rights</h2>
+    <p>You can access and edit your own profile information (name, mobile number, district) directly in the app under Profile → Edit Profile. You can delete your bookmarks, practice history (via account deletion), and your account at any time as described above. If you have a request this app's own screens don't cover, contact us using the information below.</p>
+  </div>
+
+  <div class="card">
+    <h2>Security</h2>
+    <p>Data is protected by Row Level Security at the database layer (see "Authentication &amp; Supabase" above), and no service-role key, database credential, or AI provider key is ever included in the app itself — those exist only in the backend's own server environment.</p>
+  </div>
+
+  <div class="card">
+    <h2>Children's / student use</h2>
+    <p>This app is intended for teachers, teacher aspirants, and students preparing for a professional teacher-certification exam — it is not directed at young children, and account creation requires the same information from every user regardless of age. If you believe a minor's data was collected inappropriately, contact us below and we will address it.</p>
+  </div>
+
+  <div class="card">
+    <h2>Third-party services actually used</h2>
+    <table>
+      <tr><th>Service</th><th>Used for</th><th>What it can see</th></tr>
+      <tr><td>Supabase</td><td>The entire backend — authentication, database, file storage, and server-side functions.</td><td>Everything listed above, since Supabase is our backend, not a separate party we additionally share data with.</td></tr>
+      <tr><td>Anthropic (Claude)</td><td>Powers AI Teacher's responses, called only from our server — the app never talks to Anthropic directly.</td><td>The text of your AI Teacher messages, and, if you ask about a specific verified question, that question's already-public verified content.</td></tr>
+    </table>
+    <p>No other third-party service is integrated into this app — no advertising network, no analytics SDK.</p>
+  </div>
+
+  <div class="card">
+    <h2>Changes to this policy</h2>
+    <p>If what the app actually collects or does changes, this page (and the matching in-app Privacy Policy screen) will be updated to reflect that.</p>
+  </div>
+
+  <div class="card">
+    <h2>Contact</h2>
+    <p>For privacy questions or an account-deletion request you cannot complete in-app, contact:<br><strong>PRIVACY_CONTACT_EMAIL_REQUIRED</strong> — replace this placeholder with a real support email before this page is treated as final for Play Store submission.</p>
+  </div>
+
+  <footer>
+    This page is the hosted counterpart to the in-app Privacy Policy screen. Source of truth: <code>docs/PRIVACY_POLICY.md</code> in the app's repository.
+  </footer>
+</div>
+</body>
+</html>

@@ -166,7 +166,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('By signing up, you agree to our', style: Theme.of(context).textTheme.bodySmall),
+                        TextButton(
+                          onPressed: () => context.push('/privacy'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     FilledButton(
                       onPressed: _isLoading ? null : _submit,
                       child: _isLoading
