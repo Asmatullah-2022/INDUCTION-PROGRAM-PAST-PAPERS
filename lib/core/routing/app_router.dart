@@ -23,6 +23,7 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/reset_password_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/bookmarks/bookmarks_screen.dart';
+import '../../features/downloads/downloads_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/home/splash_screen.dart';
 import '../../features/papers/answer_key_screen.dart';
@@ -146,6 +147,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             PracticeResultScreen(result: state.extra as PracticeResult),
       ),
       GoRoute(path: '/bookmarks', builder: (context, state) => const BookmarksScreen()),
+      GoRoute(path: '/downloads', builder: (context, state) => const DownloadsScreen()),
       GoRoute(path: '/progress', builder: (context, state) => const ProgressScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),

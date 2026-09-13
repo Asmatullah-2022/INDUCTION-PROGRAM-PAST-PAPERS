@@ -45,6 +45,12 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               children: [
                 ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('Downloads'),
+                  onTap: () => context.push('/downloads'),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('About App'),
                   onTap: () => context.push('/about'),

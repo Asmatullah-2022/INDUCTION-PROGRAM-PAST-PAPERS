@@ -22,9 +22,10 @@ sits inside.
 | `ai_conversations`, `ai_messages` | PASS | Owner-only (direct `user_id`, or via parent conversation for messages). |
 | `ai_usage_daily` | PASS | Read-own only, **no insert/update policy for authenticated users at all** — only the Edge Function's service-role client can write it, so a user cannot inflate or reset their own quota. |
 
-**WARNING**: none of the above have been executed against a live
-Supabase project with real anonymous/authenticated/admin JWTs — see "RLS
-test preparation" below for the exact tests to run once one exists.
+**BLOCKED — LIVE TEST REQUIRED**: none of the above have been executed
+against a live Supabase project with real anonymous/authenticated/admin
+JWTs — see "RLS test preparation" below and `docs/
+LIVE_SUPABASE_TEST_PLAN.md` for the exact tests to run once one exists.
 
 ## Authentication
 
@@ -127,11 +128,40 @@ test preparation" below for the exact tests to run once one exists.
   `DRAFT`/`UNDER_REVIEW` paper — regardless of what label the admin UI
   shows for it — can never appear in a normal user's query results.
 
+## Download security
+
+- PASS — the Downloads Manager (`DownloadsService`,
+  `lib/features/downloads/`) is not a separate authorization path. Every
+  file it saves is either (a) a PDF generated client-side from
+  [Question]s the app already fetched under RLS (so if the caller
+  couldn't read it, there's nothing to generate a PDF from in the first
+  place), or (b) a PUBLISHED paper's own `source_file_url`, itself only
+  ever populated for and only ever publicly readable for a published
+  paper. `DownloadsService` holds no Supabase credentials, calls no
+  privileged endpoint, and cannot itself decide what a user is allowed
+  to see — it only persists bytes the rest of the app already
+  legitimately obtained.
+- PASS — no signed URL was needed: original paper files are intentionally
+  public-read once a paper is `PUBLISHED` (see "Storage policies" above),
+  so a plain `HttpClient` GET (the same mechanism the original-paper
+  viewer already used) is sufficient and adds no new credential surface.
+- PASS — downloaded files and their index (`DownloadRecord`s) live only
+  in the device's own local app-documents directory and local
+  SharedPreferences — never uploaded anywhere, never visible to any
+  other user or admin.
+- PASS — account deletion now also clears all downloaded files and the
+  local cache (`AuthRepository.deleteAccount` → `DownloadsService.
+  clearAll()`/`CacheService.clearAll()`), so nothing tied to a deleted
+  account lingers on the device.
+
 ## RLS test preparation
 
 Because no live Supabase project exists in this sandbox, the tests below
-are **documented, not performed** — this is the exact test plan for
-whoever has access to a real project to execute, per role:
+are **BLOCKED — LIVE TEST REQUIRED**, not performed — this is the exact
+test plan for whoever has access to a real project to execute, per
+role. See `docs/LIVE_SUPABASE_TEST_PLAN.md` for the full, expanded
+per-area test matrix (including admin CRUD, answer verification, and
+Storage access); the table below is the short summary.
 
 | Role | Must be able to | Must NOT be able to |
 |---|---|---|

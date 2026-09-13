@@ -130,7 +130,8 @@ See `docs/AI_TEACHER_GUIDE.md` for the full architecture, environment variables,
 | Solved Long Questions PDF | COMPLETED |
 | Complete Solved Paper PDF | COMPLETED |
 | Generated PDFs show app name/phase/subject/title/section/questions/answers/verification status/generated date | COMPLETED — see `PdfExportService`, every field is read from `Paper`/`Question`, nothing invented |
-| Real exam content in an exported PDF | BLOCKED BY MISSING SOURCE PAPERS — exporting works today; there's nothing real to export yet |
+| Persistent Downloads Manager (save locally, list, Open/Share/Delete, duplicate prevention, missing-file detection) | COMPLETED — `lib/features/downloads/`, `DownloadsService`; see `docs/SECURITY_AUDIT.md` "Download security" and `docs/REMAINING_WORK_AUDIT.md` §15. |
+| Real exam content in an exported PDF | BLOCKED BY MISSING SOURCE PAPERS — exporting/downloading works today; there's nothing real to export yet |
 
 ## Security
 

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -17,7 +19,11 @@ import '../constants/app_constants.dart';
 class PdfExportService {
   PdfExportService._();
 
-  static Future<void> shareDocument({
+  /// Builds the PDF bytes only — shared by [shareDocument] (ephemeral OS
+  /// share sheet) and DownloadsService (persists the same bytes to a
+  /// local file for the Downloads screen), so the two paths can never
+  /// drift into generating different documents for the same request.
+  static Future<Uint8List> buildBytes({
     required Paper paper,
     required String phaseName,
     required String subjectName,
@@ -51,10 +57,32 @@ class PdfExportService {
       ),
     );
 
-    final bytes = await doc.save();
-    final fileName =
-        '${paper.title}_${documentTitle.replaceAll(' ', '_')}.pdf'.replaceAll(RegExp(r'[^\w.]'), '_');
-    await Printing.sharePdf(bytes: bytes, filename: fileName);
+    return doc.save();
+  }
+
+  /// A safe, filesystem-friendly file name for [paper]/[documentTitle] —
+  /// shared by [shareDocument] and DownloadsService so a saved file and
+  /// a shared one are named consistently.
+  static String fileNameFor(Paper paper, String documentTitle) {
+    return '${paper.title}_${documentTitle.replaceAll(' ', '_')}.pdf'
+        .replaceAll(RegExp(r'[^\w.]'), '_');
+  }
+
+  static Future<void> shareDocument({
+    required Paper paper,
+    required String phaseName,
+    required String subjectName,
+    required String documentTitle,
+    required List<({PaperSection section, List<Question> questions})> sections,
+  }) async {
+    final bytes = await buildBytes(
+      paper: paper,
+      phaseName: phaseName,
+      subjectName: subjectName,
+      documentTitle: documentTitle,
+      sections: sections,
+    );
+    await Printing.sharePdf(bytes: bytes, filename: fileNameFor(paper, documentTitle));
   }
 
   static List<pw.Widget> _buildSection(PaperSection section, List<Question> questions) {

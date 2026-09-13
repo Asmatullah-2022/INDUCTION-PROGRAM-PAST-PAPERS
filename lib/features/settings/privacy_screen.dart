@@ -23,6 +23,32 @@ class PrivacyScreen extends StatelessWidget {
           ),
           SizedBox(height: 16),
           Text(
+            'AI Teacher',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'If you use AI Teacher, your messages and its responses are stored under '
+            'your account so you can revisit past conversations. This data is never '
+            'shared with anyone else and is used only to provide the AI Teacher '
+            'feature and enforce a daily usage limit. AI Teacher responses are '
+            'clearly labelled as AI-generated and are never treated as official '
+            'verified answers.',
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Downloads',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Files you download (answer keys, solved questions, original papers) are '
+            'saved only on your own device\'s local storage. We do not track what you '
+            'download; the Downloads screen simply lists files already saved on your '
+            'device.',
+          ),
+          SizedBox(height: 16),
+          Text(
             'How We Use Your Information',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
           ),
@@ -41,7 +67,7 @@ class PrivacyScreen extends StatelessWidget {
           Text(
             'Data is stored securely using Supabase (PostgreSQL) with Row Level '
             'Security enabled, so you can only access your own bookmarks, progress, '
-            'and practice attempts.',
+            'practice attempts, and AI Teacher conversations.',
           ),
           SizedBox(height: 16),
           Text(
@@ -51,8 +77,9 @@ class PrivacyScreen extends StatelessWidget {
           SizedBox(height: 8),
           Text(
             'You may delete your account at any time from Profile > Delete Account. '
-            'This permanently removes your profile, bookmarks, practice attempts, and '
-            'progress data according to our data-retention policy.',
+            'This permanently removes your profile, bookmarks, practice attempts, '
+            'progress data, and AI Teacher conversations, and clears any files this '
+            'app saved on your device.',
           ),
           SizedBox(height: 16),
           Text(

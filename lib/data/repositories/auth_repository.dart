@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/errors/app_exception.dart';
+import '../../core/services/cache_service.dart';
+import '../../core/services/downloads_service.dart';
 import '../../core/services/supabase_service.dart';
 
 class AuthRepository {
@@ -64,6 +66,11 @@ class AuthRepository {
   /// Deletes the user's own account data and account via a Supabase Edge
   /// Function invoked with the user's own JWT (the client never holds a
   /// service-role key, so the destructive delete must happen server-side).
+  /// Also wipes local device state (cached content, downloaded PDFs) so
+  /// nothing tied to the now-deleted account lingers on the device after
+  /// sign-out — best-effort: a local-cleanup failure never blocks the
+  /// account deletion itself, since the server-side deletion already
+  /// succeeded by the time cleanup runs.
   Future<void> deleteAccount() async {
     try {
       await _client.functions.invoke('delete-account');
@@ -72,6 +79,12 @@ class AuthRepository {
       throw const AppException(
         'Could not delete your account right now. Please try again later.',
       );
+    }
+    try {
+      await DownloadsService.clearAll();
+      await CacheService.clearAll();
+    } catch (_) {
+      // Best-effort local cleanup — the account is already deleted server-side.
     }
   }
 

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/services/downloads_service.dart';
 import '../../core/services/pdf_export_service.dart';
 import '../../core/utils/debouncer.dart';
+import '../../data/models/download_record.dart';
 import '../../data/repositories/paper_repository.dart' show SectionWithQuestions;
 import '../../shared/widgets/question_tile.dart';
 import '../../shared/widgets/state_widgets.dart';
+import '../downloads/downloads_providers.dart';
 import 'papers_providers.dart';
 
 class CompleteSolutionScreen extends ConsumerStatefulWidget {
@@ -38,6 +42,14 @@ class _CompleteSolutionScreenState extends ConsumerState<CompleteSolutionScreen>
       appBar: AppBar(
         title: const Text('Complete Solved Paper'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Download PDF',
+            onPressed: sectionsAsync.maybeWhen(
+              data: (sections) => sections.isEmpty ? null : () => _downloadPdf(context, sections),
+              orElse: () => null,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
             tooltip: 'Export as PDF',
@@ -138,5 +150,36 @@ class _CompleteSolutionScreenState extends ConsumerState<CompleteSolutionScreen>
         for (final s in sections) (section: s.section, questions: s.questions),
       ],
     );
+  }
+
+  Future<void> _downloadPdf(BuildContext context, List<SectionWithQuestions> sections) async {
+    final paper = await ref.read(paperByIdProvider(widget.paperId).future);
+    final names = await ref.read(paperPhaseSubjectNamesProvider(widget.paperId).future);
+    try {
+      await DownloadsService.downloadGeneratedPdf(
+        paper: paper,
+        phaseName: names.phaseName,
+        subjectName: names.subjectName,
+        documentType: DownloadDocumentType.completeSolvedPaper,
+        documentTitle: 'Complete Solved Paper',
+        sections: [
+          for (final s in sections) (section: s.section, questions: s.questions),
+        ],
+      );
+      ref.read(downloadsProvider.notifier).refresh();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Saved to Downloads'),
+            action: SnackBarAction(label: 'View', onPressed: () => context.push('/downloads')),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Download failed: $e')));
+      }
+    }
   }
 }

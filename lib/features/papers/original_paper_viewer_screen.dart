@@ -3,11 +3,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/services/downloads_service.dart';
+import '../../data/models/paper.dart';
 import '../../shared/widgets/state_widgets.dart';
+import '../downloads/downloads_providers.dart';
 import 'papers_providers.dart';
 
 /// Displays the original scanned/source paper exactly as supplied — this
@@ -105,6 +109,11 @@ class _OriginalPaperViewerScreenState extends ConsumerState<OriginalPaperViewerS
                 onPressed: () => setState(() => _fullscreen = true),
               ),
               IconButton(
+                icon: const Icon(Icons.download_outlined),
+                tooltip: 'Download',
+                onPressed: () => _downloadOriginal(paper),
+              ),
+              IconButton(
                 icon: const Icon(Icons.share_outlined),
                 onPressed: () => Share.shareUri(Uri.parse(url)),
               ),
@@ -122,6 +131,30 @@ class _OriginalPaperViewerScreenState extends ConsumerState<OriginalPaperViewerS
         ),
       ),
     );
+  }
+
+  Future<void> _downloadOriginal(Paper paper) async {
+    final names = await ref.read(paperPhaseSubjectNamesProvider(widget.paperId).future);
+    try {
+      await DownloadsService.downloadOriginalPaper(
+        paper: paper,
+        phaseName: names.phaseName,
+        subjectName: names.subjectName,
+      );
+      ref.read(downloadsProvider.notifier).refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Saved to Downloads'),
+            action: SnackBarAction(label: 'View', onPressed: () => context.push('/downloads')),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+      }
+    }
   }
 
   Widget _buildPdfViewer(String url) {

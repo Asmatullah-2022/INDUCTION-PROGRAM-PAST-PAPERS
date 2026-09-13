@@ -22,6 +22,7 @@ dependencies:
   # Local storage / offline cache
   shared_preferences: ^2.5.2
   connectivity_plus: ^6.1.3
+  path_provider: ^2.1.5
 
   # Original paper viewer
   pdfx: ^2.9.2

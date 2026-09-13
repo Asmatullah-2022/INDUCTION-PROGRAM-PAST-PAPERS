@@ -186,18 +186,23 @@ regardless of what the UI does.
 
 ## 15. Download system
 
-COMPLETED — original/MCQ-answer-key/solved-short/solved-long/complete-
-solved-paper downloads via `PdfExportService` + `printing`/`pdf`
-packages; share/open handled by the OS share sheet (`share_plus`).
-**Not present**: a dedicated in-app "Downloads" list screen (Downloaded
-Files / Open / Share / Delete) distinct from "generate and share
-immediately" — the current flow generates a PDF on demand and hands it
-to the OS share sheet rather than keeping a persistent, app-managed
-download history. Classified **PARTIALLY COMPLETED**: the underlying
-generation/export capability is solid; a persistent downloads-manager UI
-is a real, addable feature, not attempted this pass to keep scope to
-what the request's stated priority order covers first (VERIFIED_ANSWER/
-AI Teacher/security/performance came ahead of it).
+**COMPLETED this pass** — added a persistent Downloads Manager
+(`lib/features/downloads/`, `DownloadsService`) that was the one gap
+flagged in the prior pass. Original paper, MCQ answer key, solved
+short/long questions, and complete solved paper can now each be saved
+to local device storage (not just ephemerally shared), listed on a
+dedicated Downloads screen with paper title/phase/subject/document
+type/size/date/verification status, and Opened (via `Printing.
+layoutPdf`)/Shared (`Share.shareXFiles`)/Deleted. Duplicate-download
+prevention is structural: a record's id is `paperId + documentType`, so
+re-downloading overwrites in place rather than accumulating entries
+(unit-tested in `test/unit/downloads_service_test.dart`). Missing/
+corrupted files are detected (`DownloadsService.fileExists`) and shown
+as a warning with Open/Share disabled, Delete still available. Only
+PUBLISHED-paper content is ever downloadable through the public flow —
+see `docs/SECURITY_AUDIT.md` "Download security" for why this was never
+a separate authorization path. Account deletion now also clears all
+downloaded files. 14 new tests (9 unit + 5 widget).
 
 ## 16. PDF generation
 
