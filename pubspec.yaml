@@ -37,6 +37,10 @@ dependencies:
   # Admin: original paper file upload
   file_picker: ^8.1.6
 
+  # Generated PDF export (answer key / short / long / complete solved paper)
+  pdf: ^3.11.1
+  printing: ^5.13.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

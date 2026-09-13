@@ -308,6 +308,27 @@ class AdminRepository {
     await _logAudit(action: 'DELETE', tableName: 'questions', recordId: questionId);
   }
 
+  /// Persists a new order for a section's questions — each question keeps
+  /// its id; only question_number/display_order change (see
+  /// QuestionReorder, the pure logic this wraps). If the paper this
+  /// section belongs to is currently VERIFIED/PUBLISHED, the
+  /// invalidate_verification_on_content_change trigger
+  /// (006_admin_workflow.sql) demotes it to UNDER_REVIEW automatically,
+  /// same as any other question edit.
+  Future<void> reorderQuestions(List<Question> orderedQuestions) async {
+    for (final q in orderedQuestions) {
+      await SupabaseService.client.from('questions').update({
+        'question_number': q.questionNumber,
+        'display_order': q.displayOrder,
+      }).eq('id', q.id);
+    }
+    await _logAudit(
+      action: 'REORDER',
+      tableName: 'questions',
+      after: {'ordered_question_ids': orderedQuestions.map((q) => q.id).toList()},
+    );
+  }
+
   /// Every non-VERIFIED question across every paper (draft or published),
   /// for the human-review queue.
   Future<List<Question>> getQuestionableQuestions() async {

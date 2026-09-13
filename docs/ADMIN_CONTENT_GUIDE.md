@@ -77,6 +77,42 @@ database.
    this is required whenever status isn't Verified, and the note is what
    end users see when they tap the warning badge.
 
+## How administrators reorder questions
+
+Open a section's question list — this is the **Section Editor**. Each
+question is shown as a card with a drag handle (☰), its number, type, a
+one-line preview, and its quality badge.
+
+1. **Drag a card** using its ☰ handle to move it up or down. On drop,
+   every question in the section is renumbered sequentially (1, 2, 3, …)
+   to match the new order automatically — you never need to manually
+   retype every question number after a reorder.
+2. A banner at the top always shows the current numbering state:
+   **✓ Numbering valid**, **⚠ N numbering issue(s)** (a gap — a skipped
+   number, not necessarily wrong), or **✗ N numbering error(s)** (a
+   duplicate number). Tap the info icon on that banner to see exactly
+   which numbers are affected.
+3. Reordering doesn't save immediately — a **"Unsaved changes"** bar
+   appears with **Save Order** and **Cancel**. Save persists the new
+   order and numbers; Cancel discards the reorder and restores the
+   question list exactly as it was.
+4. An **Undo** button appears in the app bar after any move, undoing one
+   drag at a time, back to the last saved state.
+5. **Reordering only ever changes a question's number/position — never
+   its identity.** The question keeps its id, its text, its answer, its
+   quality status; only where it sits in the section and what number it
+   shows change.
+
+**One caveat**: automatic sequential renumbering is the right default for
+fixing an editing mistake (e.g. you accidentally created two questions
+numbered 7). It is **not** the right tool for "cleaning up" a gap that
+exists in the *original source paper itself* — if the original paper's
+own printed numbering skips a number (e.g. a voided question), renumbering
+everything after it to close the gap would misrepresent the source
+document. Use your judgment before saving a reorder that closes a gap; the
+numbering banner tells you a gap exists, it doesn't tell you whether it's
+a mistake or original to the paper.
+
 ## How quality checks work
 
 Every paper has a **Quality Check** report, visible on its **Review &
@@ -175,6 +211,23 @@ Archived.
 - **"MISSING SOURCE PAPER — DO NOT PUBLISH"**: this is not an error to
   work around — it means exactly what it says. Upload the real original
   file before doing anything else with that paper.
+
+## Content Coverage and exporting PDFs
+
+**Admin → Content Coverage** (`/admin/coverage`) lists all 24 phase/subject
+slots at once, each with its real status badge (or **Missing Source** if
+no paper exists yet for that slot) — useful for seeing at a glance what
+still needs a source paper, without paging through Manage Papers.
+
+Once a paper has real content, the **MCQ Answer Key**, **Short
+Questions**, **Long Questions**, and **Complete Solved Paper** screens
+each have a PDF icon in their app bar that generates and shares a PDF of
+exactly what's on screen — app name, phase, subject, paper title,
+section(s), questions, answers, quality-check notes, verification status,
+and the generation date, all read from the same data the screen displays
+(nothing is added that isn't already verified/entered content). The
+original source file itself doesn't need "exporting" — it's already a
+PDF/image, viewable and shareable from the Original Paper screen.
 
 ## How to import future Phase II/III/IV papers
 

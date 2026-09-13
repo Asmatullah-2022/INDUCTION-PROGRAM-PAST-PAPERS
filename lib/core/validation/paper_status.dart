@@ -2,6 +2,7 @@ import '../../data/models/paper.dart';
 import '../../data/models/paper_section.dart';
 import '../../data/models/question.dart';
 import '../constants/app_constants.dart';
+import 'question_numbering.dart';
 
 /// The 5 stored `papers.content_status` values (see
 /// supabase/migrations/001_initial_schema.sql). "Missing Source" and
@@ -130,17 +131,21 @@ class PaperQualityChecker {
         continue;
       }
 
-      final seenNumbers = <int>{};
+      // Duplicate/gap detection is not re-implemented here — see
+      // QuestionNumberingValidator, the one canonical place for this rule,
+      // also used live by the Section Editor.
+      final numberingReport =
+          QuestionNumberingValidator.check(questions.map((q) => q.questionNumber).toList());
+      for (final issue in numberingReport.issues) {
+        final isError = issue.severity == NumberingIssueSeverity.error;
+        (isError ? errors : warnings).add(QualityIssue(
+          severity: isError ? QualityIssueSeverity.error : QualityIssueSeverity.warning,
+          message: 'Section $sectionCode: ${issue.message}',
+        ));
+      }
+
       for (final q in questions) {
         final label = 'Section $sectionCode Q${q.questionNumber}';
-
-        if (!seenNumbers.add(q.questionNumber)) {
-          errors.add(QualityIssue(
-            severity: QualityIssueSeverity.error,
-            message: '$label: duplicate question number in this section.',
-            questionId: q.id,
-          ));
-        }
 
         if (q.questionText.trim().isEmpty) {
           errors.add(QualityIssue(

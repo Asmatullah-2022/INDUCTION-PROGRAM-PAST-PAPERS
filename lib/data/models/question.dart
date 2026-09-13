@@ -42,6 +42,25 @@ class Question {
 
   bool get hasAnswerKeyDiscrepancy => verificationStatus == 'PAPER_ANSWER_ERROR';
 
+  /// Used by QuestionReorder to move a question's position/number without
+  /// touching its identity (id) or any other field.
+  Question copyWith({int? questionNumber, int? displayOrder}) => Question(
+        id: id,
+        paperSectionId: paperSectionId,
+        questionNumber: questionNumber ?? this.questionNumber,
+        questionType: questionType,
+        questionText: questionText,
+        marks: marks,
+        originalMarkedOption: originalMarkedOption,
+        verifiedAnswer: verifiedAnswer,
+        verificationStatus: verificationStatus,
+        explanation: explanation,
+        qualityStatus: qualityStatus,
+        qualityNote: qualityNote,
+        displayOrder: displayOrder ?? this.displayOrder,
+        options: options,
+      );
+
   factory Question.fromJson(Map<String, dynamic> json) {
     final rawOptions = json['question_options'] as List<dynamic>? ?? const [];
     return Question(

@@ -185,7 +185,9 @@ void main() {
         ],
       );
       expect(report.hasCriticalErrors, isTrue);
-      expect(report.errors.any((e) => e.message.contains('duplicate question number')), isTrue);
+      expect(
+          report.errors.any((e) => e.message.toLowerCase().contains('duplicate question number')),
+          isTrue);
     });
 
     test('an MCQ with no correct option is a critical error', () {
@@ -263,6 +265,20 @@ void main() {
       expect(report.hasCriticalErrors, isFalse);
       expect(report.warnings, isNotEmpty);
       expect(report.category, QualityCategory.warning);
+    });
+
+    test('5. an empty question_text is a critical error', () {
+      final report = PaperQualityChecker.check(
+        paper: _paper(),
+        sections: [
+          (
+            section: _section('A'),
+            questions: [_mcqQuestion(id: 'q1', number: 1, text: '   ', options: _twoOptionsOneCorrect())],
+          ),
+        ],
+      );
+      expect(report.hasCriticalErrors, isTrue);
+      expect(report.errors.any((e) => e.message.contains('question text is empty')), isTrue);
     });
 
     test('a fully clean paper passes with score 100 and PASS category', () {

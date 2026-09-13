@@ -112,6 +112,14 @@ class AdminDashboardScreen extends ConsumerWidget {
                       ),
                       const Divider(height: 1),
                       ListTile(
+                        leading: const Icon(Icons.grid_view_outlined),
+                        title: const Text('Content Coverage'),
+                        subtitle: const Text('All 24 phase/subject slots and their status'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/admin/coverage'),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
                         leading: const Icon(Icons.rule_folder_outlined),
                         title: const Text('Review Questionable Questions'),
                         trailing: const Icon(Icons.chevron_right),
