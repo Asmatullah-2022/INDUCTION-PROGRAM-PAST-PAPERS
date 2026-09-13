@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/admin/admin_dashboard_screen.dart';
+import '../../features/admin/admin_audit_log_screen.dart';
 import '../../features/admin/admin_paper_detail_screen.dart';
+import '../../features/admin/admin_paper_review_screen.dart';
 import '../../features/admin/admin_paper_form_screen.dart';
 import '../../features/admin/admin_papers_screen.dart';
 import '../../features/admin/admin_question_form_screen.dart';
@@ -153,12 +155,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           questionId: state.pathParameters['questionId'],
         ),
       ),
+      GoRoute(path: '/admin/audit-log', builder: (context, state) => const AdminAuditLogScreen()),
       GoRoute(path: '/admin/papers', builder: (context, state) => const AdminPapersScreen()),
       GoRoute(path: '/admin/papers/new', builder: (context, state) => const AdminPaperFormScreen()),
       GoRoute(
         path: '/admin/papers/:paperId',
         builder: (context, state) =>
             AdminPaperDetailScreen(paperId: state.pathParameters['paperId']!),
+      ),
+      GoRoute(
+        path: '/admin/papers/:paperId/review',
+        builder: (context, state) =>
+            AdminPaperReviewScreen(paperId: state.pathParameters['paperId']!),
       ),
       GoRoute(
         path: '/admin/papers/:paperId/sections',

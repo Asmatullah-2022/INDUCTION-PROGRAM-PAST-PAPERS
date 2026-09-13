@@ -31,7 +31,7 @@ class SubjectScreen extends ConsumerWidget {
           if (papers.isEmpty) {
             return const EmptyState(
               icon: Icons.description_outlined,
-              title: 'No published paper yet',
+              title: 'No verified papers available yet.',
               subtitle:
                   'MISSING SOURCE PAPER — this paper has not been published for this phase/subject yet.',
             );

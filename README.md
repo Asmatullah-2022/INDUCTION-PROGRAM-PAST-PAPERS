@@ -95,7 +95,8 @@ write), with the path convention
 
 ## Content Import
 
-See `content/README.md` for the full workflow. In short:
+See `docs/CONTENT_IMPORT_GUIDE.md` (or `content/README.md`) for the full
+scripted workflow. In short:
 
 ```bash
 dart run scripts/validate_content.dart content
@@ -110,14 +111,23 @@ source papers are supplied and go through this pipeline.
 ## Admin Setup
 
 Admin access is controlled by `profiles.is_admin` (see Supabase Setup
-above) and enforced server-side by RLS — see `CLAUDE.md` "Security Rules".
-The in-app `/admin` route ships:
+above) and enforced server-side by RLS plus the
+`admin_transition_paper_status` Postgres function
+(`006_admin_workflow.sql`) — see `CLAUDE.md` "Security Rules". For the
+full manual (in-app) content workflow, see
+**`docs/ADMIN_CONTENT_GUIDE.md`**. In short, the in-app `/admin` route
+ships:
 
-- a content QA dashboard (published-paper counts per phase,
-  question-type/quality-status counts, missing-slot banner);
-- **Manage Papers** (`/admin/papers`): create a paper for a phase/subject
-  slot, upload/replace its original PDF/image to Storage, and change its
-  `content_status` (publishing requires an explicit confirmation);
+- a content dashboard (`/admin`) with real counts — total/draft/needs
+  review/verified/published/archived/missing-source papers, published
+  papers by phase, total subjects/questions/users, and question-type/
+  quality-status breakdowns; never a placeholder number, always 0 on an
+  empty database;
+- **Manage Papers** (`/admin/papers`): search by title/cadre, filter by
+  phase/subject/status, sort by newest/oldest/title, and create a paper
+  for a phase/subject slot;
+- a paper detail screen: upload/replace its original PDF/image to
+  Storage, and links to section management and to Review & Publish;
 - section management (`/admin/papers/:id/sections`): add/delete Section
   A/B/C-style sections with marks and instructions;
 - question management (`.../sections/:id/questions`): add/edit/delete
@@ -125,12 +135,21 @@ The in-app `/admin` route ships:
   options, pick the verified-correct one, and optionally record the
   original marked option — a mismatch automatically flags
   `PAPER_ANSWER_ERROR`), and the quality-status/quality-note fields;
+- **Review & Publish** (`/admin/papers/:id/review`): the quality report
+  (score, ✗ critical errors, ⚠ warnings) and the gated
+  Submit-for-Review/Verify/Publish/Unpublish/Archive/Restore workflow —
+  Verify and Publish are disabled while any critical error remains, and
+  re-validated server-side regardless of what the UI shows;
 - **Review Questionable Questions** (`/admin/review`): every question
   anywhere whose `quality_status` isn't `VERIFIED`, opening straight into
-  the question editor above.
+  the question editor above;
+- **Audit Log** (`/admin/audit-log`): every admin content write plus
+  automatic status transitions and verification invalidations.
 
 All of this is a UX convenience only — see `CLAUDE.md` "Security Rules" for
-why the actual enforcement is server-side RLS, not this UI.
+why the actual enforcement is server-side RLS and the
+`admin_transition_paper_status`/`paper_has_critical_errors` Postgres
+functions, not this UI.
 
 ## Testing
 

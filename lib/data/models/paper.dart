@@ -13,6 +13,9 @@ class Paper {
   final String? sourceFileType;
   final String contentStatus;
   final String verificationStatus;
+  final String? verifiedBy;
+  final DateTime? verifiedAt;
+  final String? verificationNotes;
   final int version;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -29,6 +32,9 @@ class Paper {
     this.sourceFileType,
     required this.contentStatus,
     required this.verificationStatus,
+    this.verifiedBy,
+    this.verifiedAt,
+    this.verificationNotes,
     required this.version,
     required this.createdAt,
     required this.updatedAt,
@@ -48,6 +54,11 @@ class Paper {
         sourceFileType: json['source_file_type'] as String?,
         contentStatus: json['content_status'] as String? ?? 'DRAFT',
         verificationStatus: json['verification_status'] as String? ?? 'DRAFT',
+        verifiedBy: json['verified_by'] as String?,
+        verifiedAt: json['verified_at'] != null
+            ? DateTime.parse(json['verified_at'] as String)
+            : null,
+        verificationNotes: json['verification_notes'] as String?,
         version: (json['version'] as num?)?.toInt() ?? 1,
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -65,6 +76,9 @@ class Paper {
         'source_file_type': sourceFileType,
         'content_status': contentStatus,
         'verification_status': verificationStatus,
+        'verified_by': verifiedBy,
+        'verified_at': verifiedAt?.toIso8601String(),
+        'verification_notes': verificationNotes,
         'version': version,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),

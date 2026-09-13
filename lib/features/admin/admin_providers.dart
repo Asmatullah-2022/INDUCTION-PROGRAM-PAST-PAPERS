@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/repository_providers.dart';
+import '../../core/validation/paper_status.dart';
 import '../../data/models/paper.dart';
 import '../../data/models/paper_section.dart';
 import '../../data/models/question.dart';
@@ -23,4 +24,9 @@ final adminQuestionProvider = FutureProvider.family<Question, String>((ref, ques
 
 final adminQuestionableQuestionsProvider = FutureProvider<List<Question>>((ref) {
   return ref.read(adminRepositoryProvider).getQuestionableQuestions();
+});
+
+final adminPaperContentProvider =
+    FutureProvider.family<List<SectionQuestions>, String>((ref, paperId) {
+  return ref.read(adminRepositoryProvider).getPaperContent(paperId);
 });

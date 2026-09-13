@@ -3,44 +3,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../core/services/supabase_service.dart';
+import '../../core/providers/repository_providers.dart';
+import '../../data/models/admin_dashboard_stats.dart';
 import '../../shared/widgets/state_widgets.dart';
 import 'admin_guard.dart';
 
-/// Content QA dashboard (spec section 60): shows how many of the 24
-/// expected phase/subject paper slots are actually published, broken
-/// down by phase, plus question-type and quality-status counts across
-/// all published content. Real content import/review screens are listed
-/// as admin destinations but intentionally out of scope for this first
-/// release — see CLAUDE.md "Admin System" for the rollout plan.
+final adminDashboardStatsProvider = FutureProvider<AdminDashboardStats>((ref) {
+  return ref.read(adminRepositoryProvider).getDashboardStats();
+});
+
+/// Content QA dashboard (spec section 60 + the admin content-management
+/// stage): every number here comes from a real query — an empty database
+/// shows zeros, never a placeholder.
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(adminDashboardStatsProvider);
+
     return AdminGuard(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Admin — Content QA Dashboard')),
-        body: FutureBuilder(
-          future: _loadStats(ref),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              if (snapshot.hasError) {
-                return ErrorState(message: snapshot.error.toString());
-              }
-              return const LoadingList();
-            }
-            final stats = snapshot.data!;
-            return ListView(
+        appBar: AppBar(title: const Text('Admin — Content Dashboard')),
+        body: statsAsync.when(
+          data: (stats) => RefreshIndicator(
+            onRefresh: () => ref.refresh(adminDashboardStatsProvider.future),
+            child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                _StatusGrid(stats: stats),
+                const SizedBox(height: 16),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Papers Published',
+                        Text('Published Papers by Phase',
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
                         Text(
@@ -51,7 +50,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 12),
-                        ...stats.publishedByPhase.entries.map(
+                        ...stats.publishedByPhaseName.entries.map(
                           (e) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Text('${e.key}: ${e.value}/8'),
@@ -68,11 +67,14 @@ class AdminDashboardScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Question Counts', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Content Totals', style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
-                        Text('MCQs: ${stats.mcqCount}'),
-                        Text('Short: ${stats.shortCount}'),
-                        Text('Long: ${stats.longCount}'),
+                        Text('Total Subjects: ${stats.totalSubjects}'),
+                        Text('Total Questions: ${stats.totalQuestions}'),
+                        Text('  MCQs: ${stats.mcqCount}'),
+                        Text('  Short: ${stats.shortCount}'),
+                        Text('  Long: ${stats.longCount}'),
+                        Text('Total Users: ${stats.totalUsers}'),
                       ],
                     ),
                   ),
@@ -84,9 +86,10 @@ class AdminDashboardScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Quality Status', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Question Quality Status',
+                            style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
-                        Text('Verified: ${stats.verifiedCount}'),
+                        Text('Verified: ${stats.verifiedQuestionCount}'),
                         Text('Questionable: ${stats.questionableCount}'),
                         Text('OCR Uncertain: ${stats.ocrUncertainCount}'),
                         Text('Paper Error: ${stats.paperErrorCount}'),
@@ -102,7 +105,8 @@ class AdminDashboardScreen extends ConsumerWidget {
                       ListTile(
                         leading: const Icon(Icons.description_outlined),
                         title: const Text('Manage Papers'),
-                        subtitle: const Text('Create papers, upload originals, edit sections/questions'),
+                        subtitle: const Text(
+                            'Create papers, upload originals, edit sections/questions'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => context.push('/admin/papers'),
                       ),
@@ -113,113 +117,88 @@ class AdminDashboardScreen extends ConsumerWidget {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => context.push('/admin/review'),
                       ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.history_outlined),
+                        title: const Text('Audit Log'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/admin/audit-log'),
+                      ),
                     ],
                   ),
                 ),
               ],
-            );
-          },
+            ),
+          ),
+          loading: () => const LoadingList(),
+          error: (e, st) => ErrorState(
+            message: e.toString(),
+            onRetry: () => ref.invalidate(adminDashboardStatsProvider),
+          ),
         ),
       ),
     );
   }
-
-  Future<_AdminStats> _loadStats(WidgetRef ref) => _AdminStats.fetch();
 }
 
-class _AdminStats {
-  final int publishedPapers;
-  final Map<String, int> publishedByPhase;
-  final int mcqCount;
-  final int shortCount;
-  final int longCount;
-  final int verifiedCount;
-  final int questionableCount;
-  final int ocrUncertainCount;
-  final int paperErrorCount;
-  final int answerUncertainCount;
+class _StatusGrid extends StatelessWidget {
+  final AdminDashboardStats stats;
+  const _StatusGrid({required this.stats});
 
-  const _AdminStats({
-    required this.publishedPapers,
-    required this.publishedByPhase,
-    required this.mcqCount,
-    required this.shortCount,
-    required this.longCount,
-    required this.verifiedCount,
-    required this.questionableCount,
-    required this.ocrUncertainCount,
-    required this.paperErrorCount,
-    required this.answerUncertainCount,
-  });
+  @override
+  Widget build(BuildContext context) {
+    final tiles = [
+      (_StatusTileData('Total Papers', stats.totalPapers, Colors.blueGrey)),
+      (_StatusTileData('Draft', stats.draftPapers, Colors.grey)),
+      (_StatusTileData('Needs Review', stats.needsReviewPapers, Colors.orange)),
+      (_StatusTileData('Verified', stats.verifiedPapers, Colors.teal)),
+      (_StatusTileData('Published', stats.publishedPapers, Colors.green)),
+      (_StatusTileData('Missing Source', stats.missingSourcePapers, Colors.red)),
+      (_StatusTileData('Archived', stats.archivedPapers, Colors.blueGrey)),
+    ];
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 160,
+        mainAxisExtent: 84,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: tiles.length,
+      itemBuilder: (context, index) => _StatusTile(data: tiles[index]),
+    );
+  }
+}
 
-  static Future<_AdminStats> fetch() async {
-    final client = SupabaseService.client;
+class _StatusTileData {
+  final String label;
+  final int value;
+  final Color color;
+  const _StatusTileData(this.label, this.value, this.color);
+}
 
-    final publishedPapersRows = await client
-        .from('papers')
-        .select('id, phase_id, phases(name)')
-        .eq('content_status', 'PUBLISHED');
+class _StatusTile extends StatelessWidget {
+  final _StatusTileData data;
+  const _StatusTile({required this.data});
 
-    final publishedByPhase = <String, int>{
-      for (final name in AppConstants.phaseNames.values) name: 0,
-    };
-    for (final row in publishedPapersRows) {
-      final phase = row['phases'] as Map<String, dynamic>?;
-      final name = phase?['name'] as String?;
-      if (name != null && publishedByPhase.containsKey(name)) {
-        publishedByPhase[name] = publishedByPhase[name]! + 1;
-      }
-    }
-
-    final questionRows = await client
-        .from('questions')
-        .select('question_type, quality_status, paper_sections!inner(papers!inner(content_status))')
-        .eq('paper_sections.papers.content_status', 'PUBLISHED');
-
-    var mcq = 0, short = 0, long = 0;
-    var verified = 0, questionable = 0, ocrUncertain = 0, paperError = 0, answerUncertain = 0;
-    for (final row in questionRows) {
-      switch (row['question_type']) {
-        case 'mcq':
-          mcq++;
-          break;
-        case 'short':
-          short++;
-          break;
-        case 'long':
-          long++;
-          break;
-      }
-      switch (row['quality_status']) {
-        case 'VERIFIED':
-          verified++;
-          break;
-        case 'QUESTIONABLE':
-          questionable++;
-          break;
-        case 'OCR_UNCERTAIN':
-          ocrUncertain++;
-          break;
-        case 'PAPER_ERROR':
-          paperError++;
-          break;
-        case 'ANSWER_UNCERTAIN':
-          answerUncertain++;
-          break;
-      }
-    }
-
-    return _AdminStats(
-      publishedPapers: publishedPapersRows.length,
-      publishedByPhase: publishedByPhase,
-      mcqCount: mcq,
-      shortCount: short,
-      longCount: long,
-      verifiedCount: verified,
-      questionableCount: questionable,
-      ocrUncertainCount: ocrUncertain,
-      paperErrorCount: paperError,
-      answerUncertainCount: answerUncertain,
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('${data.value}',
+                style: TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.w800, color: data.color)),
+            const SizedBox(height: 4),
+            Text(data.label, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -10,10 +10,14 @@ import '../home/home_providers.dart';
 import '../papers/papers_providers.dart';
 import '../phases/phase_screen.dart' show subjectsProvider;
 import 'admin_guard.dart';
+import 'admin_papers_screen.dart' show PaperStatusBadge;
 import 'admin_providers.dart';
 
-const _contentStatuses = ['DRAFT', 'UNDER_REVIEW', 'VERIFIED', 'PUBLISHED', 'ARCHIVED'];
-
+/// Paper metadata + source-file upload. Status transitions themselves
+/// (Submit for Review / Verify / Publish / Unpublish / Archive) live on
+/// the Paper Review screen, which also shows the quality report those
+/// actions are gated on — kept separate so this screen stays a simple,
+/// low-risk place to edit metadata and attach the source file.
 class AdminPaperDetailScreen extends ConsumerStatefulWidget {
   final String paperId;
   const AdminPaperDetailScreen({super.key, required this.paperId});
@@ -24,7 +28,6 @@ class AdminPaperDetailScreen extends ConsumerStatefulWidget {
 
 class _AdminPaperDetailScreenState extends ConsumerState<AdminPaperDetailScreen> {
   bool _isUploading = false;
-  String? _statusError;
 
   Future<void> _pickAndUploadFile(Paper paper) async {
     final phases = await ref.read(phasesProvider.future);
@@ -60,43 +63,10 @@ class _AdminPaperDetailScreenState extends ConsumerState<AdminPaperDetailScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
-    }
-  }
-
-  Future<void> _changeStatus(Paper paper, String newStatus) async {
-    // Publishing must always be an explicit, informed decision — never a
-    // one-tap accident — so confirm before flipping to PUBLISHED.
-    if (newStatus == 'PUBLISHED') {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Publish this paper?'),
-          content: const Text(
-            'This paper will become visible to all users. Only publish content '
-            'that has completed the verification workflow (no unresolved '
-            'QUESTIONABLE / PAPER_ERROR / OCR_UNCERTAIN / ANSWER_UNCERTAIN items).',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Publish')),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-    }
-    try {
-      await ref
-          .read(adminRepositoryProvider)
-          .setContentStatus(paperId: paper.id, status: newStatus);
-      ref.invalidate(adminAllPapersProvider);
-      ref.invalidate(paperByIdProvider(paper.id));
-    } catch (e) {
-      setState(() => _statusError = e.toString());
     }
   }
 
@@ -112,36 +82,17 @@ class _AdminPaperDetailScreenState extends ConsumerState<AdminPaperDetailScreen>
           data: (paper) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(paper.title,
-                  style:
-                      Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Content Status', style: Theme.of(context).textTheme.labelMedium),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: _contentStatuses
-                            .map((status) => ChoiceChip(
-                                  label: Text(status),
-                                  selected: paper.contentStatus == status,
-                                  onSelected: (_) => _changeStatus(paper, status),
-                                ))
-                            .toList(),
-                      ),
-                      if (_statusError != null) ...[
-                        const SizedBox(height: 8),
-                        Text(_statusError!,
-                            style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                      ],
-                    ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(paper.title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w700)),
                   ),
-                ),
+                  PaperStatusBadge(paper: paper),
+                ],
               ),
               const SizedBox(height: 16),
               Card(
@@ -160,7 +111,9 @@ class _AdminPaperDetailScreenState extends ConsumerState<AdminPaperDetailScreen>
                         onPressed: _isUploading ? null : () => _pickAndUploadFile(paper),
                         icon: _isUploading
                             ? const SizedBox(
-                                height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.upload_file_outlined),
                         label: Text(paper.sourceFileUrl == null ? 'Upload File' : 'Replace File'),
                       ),
@@ -178,6 +131,16 @@ class _AdminPaperDetailScreenState extends ConsumerState<AdminPaperDetailScreen>
                     orElse: () => null,
                   ),
                   onTap: () => context.push('/admin/papers/${paper.id}/sections'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.fact_check_outlined),
+                  title: const Text('Review & Publish'),
+                  subtitle: const Text('Quality report and verification workflow'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/admin/papers/${paper.id}/review'),
                 ),
               ),
             ],

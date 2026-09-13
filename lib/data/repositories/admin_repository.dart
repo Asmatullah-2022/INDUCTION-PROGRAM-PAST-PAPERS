@@ -5,16 +5,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
 import '../../core/services/supabase_service.dart';
+import '../../core/validation/paper_status.dart';
 import '../../core/validation/question_validation.dart';
+import '../models/admin_dashboard_stats.dart';
+import '../models/audit_log.dart';
 import '../models/paper.dart';
 import '../models/paper_section.dart';
 import '../models/question.dart';
 
 /// Admin-only writes to official content tables. Every method here is a
 /// UX convenience — the real access control is Postgres RLS requiring
-/// profiles.is_admin = true (see supabase/migrations/002_rls.sql). If the
-/// requesting user isn't actually an admin, these calls fail server-side
-/// regardless of what the client believes.
+/// profiles.is_admin = true (see supabase/migrations/002_rls.sql), and
+/// paper status transitions are additionally re-validated inside the
+/// admin_transition_paper_status Postgres function (see
+/// supabase/migrations/006_admin_workflow.sql) so a client can never
+/// force an illegal transition or publish content with unresolved
+/// critical quality errors, no matter what the Flutter UI allows.
 class AdminRepository {
   /// Admins can see every paper (any content_status), unlike
   /// PaperRepository which only ever returns PUBLISHED papers.
@@ -48,7 +54,9 @@ class AdminRepository {
         })
         .select()
         .single();
-    return Paper.fromJson(row);
+    final paper = Paper.fromJson(row);
+    await _logAudit(action: 'CREATE', tableName: 'papers', recordId: paper.id, after: row);
+    return paper;
   }
 
   Future<Paper> updatePaper({
@@ -59,6 +67,11 @@ class AdminRepository {
     int? durationMinutes,
   }) async {
     final userId = SupabaseService.currentUser?.id;
+    final before = await SupabaseService.client
+        .from('papers')
+        .select()
+        .eq('id', paperId)
+        .single();
     final row = await SupabaseService.client
         .from('papers')
         .update({
@@ -67,21 +80,19 @@ class AdminRepository {
           'total_marks': totalMarks,
           'duration_minutes': durationMinutes,
           'updated_by': userId,
-          'version': await _incrementedVersion(paperId),
+          'version': ((before['version'] as num?)?.toInt() ?? 1) + 1,
         })
         .eq('id', paperId)
         .select()
         .single();
+    await _logAudit(
+      action: 'UPDATE',
+      tableName: 'papers',
+      recordId: paperId,
+      before: before,
+      after: row,
+    );
     return Paper.fromJson(row);
-  }
-
-  Future<int> _incrementedVersion(String paperId) async {
-    final row = await SupabaseService.client
-        .from('papers')
-        .select('version')
-        .eq('id', paperId)
-        .single();
-    return ((row['version'] as num?)?.toInt() ?? 1) + 1;
   }
 
   /// Uploads the original scanned paper to the `original-papers` bucket at
@@ -112,17 +123,35 @@ class AdminRepository {
       'source_file_url': publicUrl,
       'source_file_type': fileType,
     }).eq('id', paperId);
+
+    await _logAudit(
+      action: 'UPDATE',
+      tableName: 'papers',
+      recordId: paperId,
+      after: {'source_file_url': publicUrl, 'source_file_type': fileType},
+    );
   }
 
-  /// Publishing is always an explicit, separate admin action — never
-  /// triggered automatically by content import or editing.
-  Future<void> setContentStatus({required String paperId, required String status}) async {
-    if (!{'DRAFT', 'UNDER_REVIEW', 'VERIFIED', 'PUBLISHED', 'ARCHIVED'}.contains(status)) {
-      throw AppException('Invalid content status: $status');
+  /// The only sanctioned way to change a paper's content_status. Delegates
+  /// to the admin_transition_paper_status Postgres function, which
+  /// re-validates the transition and the quality gate server-side and
+  /// writes its own audit_logs row — see 006_admin_workflow.sql. A client
+  /// bypassing PaperStatusTransitions/PaperQualityChecker entirely still
+  /// can't force an illegal or unqualified transition.
+  Future<void> transitionPaperStatus({
+    required String paperId,
+    required String newStatus,
+    String? notes,
+  }) async {
+    try {
+      await SupabaseService.client.rpc('admin_transition_paper_status', params: {
+        'p_paper_id': paperId,
+        'p_new_status': newStatus,
+        'p_notes': notes,
+      });
+    } on PostgrestException catch (e) {
+      throw AppException(e.message);
     }
-    await SupabaseService.client
-        .from('papers')
-        .update({'content_status': status}).eq('id', paperId);
   }
 
   Future<List<PaperSection>> getSections(String paperId) async {
@@ -132,6 +161,18 @@ class AdminRepository {
         .eq('paper_id', paperId)
         .order('display_order');
     return rows.map((r) => PaperSection.fromJson(r)).toList();
+  }
+
+  /// Sections paired with their questions, for the quality checker and the
+  /// Paper Review screen.
+  Future<List<SectionQuestions>> getPaperContent(String paperId) async {
+    final sections = await getSections(paperId);
+    final result = <SectionQuestions>[];
+    for (final section in sections) {
+      final questions = await getQuestions(section.id);
+      result.add((section: section, questions: questions));
+    }
+    return result;
   }
 
   Future<PaperSection> createSection({
@@ -154,11 +195,14 @@ class AdminRepository {
         })
         .select()
         .single();
-    return PaperSection.fromJson(row);
+    final section = PaperSection.fromJson(row);
+    await _logAudit(action: 'CREATE', tableName: 'paper_sections', recordId: section.id, after: row);
+    return section;
   }
 
   Future<void> deleteSection(String sectionId) async {
     await SupabaseService.client.from('paper_sections').delete().eq('id', sectionId);
+    await _logAudit(action: 'DELETE', tableName: 'paper_sections', recordId: sectionId);
   }
 
   Future<Question> getQuestion(String questionId) async {
@@ -181,7 +225,11 @@ class AdminRepository {
 
   /// Inserts or updates a question along with its MCQ options (options are
   /// fully replaced on update — simplest way to keep labels/order/correct
-  /// flag consistent without diffing).
+  /// flag consistent without diffing). If the question's paper is
+  /// currently VERIFIED/PUBLISHED, the invalidate_verification_on_content_change
+  /// trigger (006_admin_workflow.sql) automatically demotes it to
+  /// UNDER_REVIEW — a modified verified question can never keep sitting
+  /// under a stale VERIFIED/PUBLISHED paper.
   Future<Question> saveQuestion({
     String? questionId,
     required String sectionId,
@@ -221,6 +269,7 @@ class AdminRepository {
     };
 
     String savedId;
+    final auditAction = questionId == null ? 'CREATE' : 'UPDATE';
     if (questionId == null) {
       final row =
           await SupabaseService.client.from('questions').insert(payload).select().single();
@@ -250,11 +299,13 @@ class AdminRepository {
         .select('*, question_options(*)')
         .eq('id', savedId)
         .single();
+    await _logAudit(action: auditAction, tableName: 'questions', recordId: savedId, after: payload);
     return Question.fromJson(row);
   }
 
   Future<void> deleteQuestion(String questionId) async {
     await SupabaseService.client.from('questions').delete().eq('id', questionId);
+    await _logAudit(action: 'DELETE', tableName: 'questions', recordId: questionId);
   }
 
   /// Every non-VERIFIED question across every paper (draft or published),
@@ -266,5 +317,131 @@ class AdminRepository {
         .neq('quality_status', 'VERIFIED')
         .order('created_at', ascending: false);
     return rows.map((r) => Question.fromJson(r)).toList();
+  }
+
+  Future<List<AuditLog>> getRecentAuditLogs({int limit = 100}) async {
+    final rows = await SupabaseService.client
+        .from('audit_logs')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return rows.map((r) => AuditLog.fromJson(r)).toList();
+  }
+
+  /// Real database-derived counts for the admin dashboard — no field here
+  /// is ever estimated or hard-coded; an empty database yields all zeros.
+  Future<AdminDashboardStats> getDashboardStats() async {
+    final client = SupabaseService.client;
+
+    final paperRows = await client.from('papers').select('content_status, source_file_url');
+    var draft = 0, needsReview = 0, verified = 0, published = 0, archived = 0, missingSource = 0;
+    for (final row in paperRows) {
+      final status = row['content_status'] as String?;
+      final hasSource = (row['source_file_url'] as String?)?.isNotEmpty ?? false;
+      if (!hasSource && status == PaperStatus.draft) missingSource++;
+      switch (status) {
+        case PaperStatus.draft:
+          draft++;
+        case PaperStatus.underReview:
+          needsReview++;
+        case PaperStatus.verified:
+          verified++;
+        case PaperStatus.published:
+          published++;
+        case PaperStatus.archived:
+          archived++;
+      }
+    }
+
+    final publishedPapersRows = await client
+        .from('papers')
+        .select('phase_id, phases(name)')
+        .eq('content_status', 'PUBLISHED');
+    final publishedByPhaseName = <String, int>{
+      for (final name in AppConstants.phaseNames.values) name: 0,
+    };
+    for (final row in publishedPapersRows) {
+      final phase = row['phases'] as Map<String, dynamic>?;
+      final name = phase?['name'] as String?;
+      if (name != null && publishedByPhaseName.containsKey(name)) {
+        publishedByPhaseName[name] = publishedByPhaseName[name]! + 1;
+      }
+    }
+
+    final subjectRows = await client.from('subjects').select('id');
+    final userRows = await client.from('profiles').select('id');
+
+    final questionRows = await client.from('questions').select('question_type, quality_status');
+    var mcq = 0, short = 0, long = 0;
+    var qVerified = 0, questionable = 0, ocrUncertain = 0, paperError = 0, answerUncertain = 0;
+    for (final row in questionRows) {
+      switch (row['question_type']) {
+        case 'mcq':
+          mcq++;
+        case 'short':
+          short++;
+        case 'long':
+          long++;
+      }
+      switch (row['quality_status']) {
+        case 'VERIFIED':
+          qVerified++;
+        case 'QUESTIONABLE':
+          questionable++;
+        case 'OCR_UNCERTAIN':
+          ocrUncertain++;
+        case 'PAPER_ERROR':
+          paperError++;
+        case 'ANSWER_UNCERTAIN':
+          answerUncertain++;
+      }
+    }
+
+    return AdminDashboardStats(
+      totalPapers: paperRows.length,
+      draftPapers: draft,
+      needsReviewPapers: needsReview,
+      verifiedPapers: verified,
+      publishedPapers: published,
+      archivedPapers: archived,
+      missingSourcePapers: missingSource,
+      publishedByPhaseName: publishedByPhaseName,
+      totalSubjects: subjectRows.length,
+      totalQuestions: questionRows.length,
+      mcqCount: mcq,
+      shortCount: short,
+      longCount: long,
+      verifiedQuestionCount: qVerified,
+      questionableCount: questionable,
+      ocrUncertainCount: ocrUncertain,
+      paperErrorCount: paperError,
+      answerUncertainCount: answerUncertain,
+      totalUsers: userRows.length,
+    );
+  }
+
+  /// Best-effort audit trail write. Never blocks the primary operation:
+  /// a logging failure (e.g. a transient network blip right after a
+  /// successful write) is swallowed rather than surfaced as if the actual
+  /// content change had failed.
+  Future<void> _logAudit({
+    required String action,
+    required String tableName,
+    String? recordId,
+    Map<String, dynamic>? before,
+    Map<String, dynamic>? after,
+  }) async {
+    try {
+      await SupabaseService.client.from('audit_logs').insert({
+        'actor_id': SupabaseService.currentUser?.id,
+        'action': action,
+        'table_name': tableName,
+        'record_id': recordId,
+        'before_data': before,
+        'after_data': after,
+      });
+    } catch (_) {
+      // Intentionally swallowed — see doc comment above.
+    }
   }
 }

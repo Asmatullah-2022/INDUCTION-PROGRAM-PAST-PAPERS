@@ -10,6 +10,12 @@ teachers prepare for the Teacher Induction Program exams: original past
 papers, verified answer keys, solved short/long questions, complete solved
 papers, MCQ practice, bookmarks, and progress tracking.
 
+For the admin content workflow specifically (how a paper moves from an
+empty phase/subject slot to Published), see
+`docs/ADMIN_CONTENT_GUIDE.md` (manual, in-app) and
+`docs/CONTENT_IMPORT_GUIDE.md` (scripted JSON import) — this file states
+the rules those guides must keep following, not the how-to.
+
 ## Architecture Rules
 
 - Clean-ish layering: `lib/core` (constants, theme, routing, errors,
@@ -53,6 +59,29 @@ papers, MCQ practice, bookmarks, and progress tracking.
 - `questions.original_marked_option` vs `questions.verified_answer` are
   deliberately separate columns — never collapse them. A tick on the
   original paper is never auto-accepted as the correct answer.
+- `papers.content_status` stays exactly the 5 values from
+  `001_initial_schema.sql` (`DRAFT`, `UNDER_REVIEW`, `VERIFIED`,
+  `PUBLISHED`, `ARCHIVED`) — `006_admin_workflow.sql` adds workflow
+  metadata (`verified_by`/`verified_at`/`verification_notes`) and
+  behavior, not new status values. "Needs Review" and "Missing Source"
+  are UI labels only (see `PaperStatusPresentation` in
+  `lib/core/validation/paper_status.dart`) — never add them as stored
+  strings; a DB migration to widen the check constraint is a bigger
+  decision than a status-label rename and hasn't been made.
+- Status changes MUST go through the `admin_transition_paper_status`
+  Postgres function (`006_admin_workflow.sql`), never a raw
+  `update papers set content_status = ...` from the client — that
+  function is what enforces the state machine and the critical-error
+  quality gate server-side. `AdminRepository.transitionPaperStatus` is
+  the only sanctioned client-side entry point; keep it that way.
+- Editing a section or question on a paper that is `VERIFIED` or
+  `PUBLISHED` automatically demotes it to `UNDER_REVIEW` and clears its
+  verification record — enforced by the
+  `invalidate_verification_on_content_change` trigger on
+  `paper_sections`/`questions`, not application code. Don't try to
+  "fix" this by re-verifying in the same request; it's intentional (spec
+  section 12: a modified verified question must never keep looking
+  verified).
 
 ## Content Rules
 
@@ -90,6 +119,16 @@ papers, MCQ practice, bookmarks, and progress tracking.
   a client-side delete call.
 - `profiles.is_admin` cannot be self-escalated by a user — enforced by the
   `prevent_self_admin_escalation` trigger, not just RLS `with check`.
+- Publishing (or verifying) a paper with unresolved critical quality
+  errors is blocked server-side by `paper_has_critical_errors` inside
+  `admin_transition_paper_status` (`006_admin_workflow.sql`) — the
+  Flutter UI's own `PaperQualityChecker` gating on the Review screen is a
+  UX convenience mirroring the same rules, not the enforcement.
+- Every admin content write should get an `audit_logs` row (see
+  `AdminRepository._logAudit`, best-effort/non-blocking) or come from a
+  trigger that writes one itself (`admin_transition_paper_status`,
+  `invalidate_verification_on_content_change`). `audit_logs` is
+  admin-read-only via RLS — don't expose it to normal users.
 
 ## Testing Rules
 
@@ -101,6 +140,16 @@ papers, MCQ practice, bookmarks, and progress tracking.
   async auth/navigation timing (see existing `pump`/`pumpAndSettle` usage).
 - `dart run scripts/validate_content.dart content` must exit 0 before any
   content import.
+- True "non-admin rejection" / RLS enforcement tests need a live Supabase
+  project and aren't run by `flutter test` in this repo — that's covered
+  by reading `002_rls.sql`/`006_admin_workflow.sql` directly, not by an
+  automated test here. What *is* unit-tested without a backend: the pure
+  logic in `lib/core/validation/` — `PaperStatusTransitions` (state
+  machine), `PaperQualityChecker` (critical-error/warning detection,
+  mirroring `paper_has_critical_errors`), `QuestionValidation`, and
+  `PaperFilter` (search/filter/sort). Add to those files and their
+  `test/unit/*_test.dart` counterparts for new admin content rules,
+  rather than writing logic inline in a repository method or widget.
 
 ## UI Rules
 
