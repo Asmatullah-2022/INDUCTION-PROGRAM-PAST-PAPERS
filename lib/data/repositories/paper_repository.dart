@@ -60,6 +60,11 @@ class PaperRepository {
 
   /// Fetches full paper structure: sections -> questions -> options, in
   /// display order, for the Complete Solved Paper / section screens.
+  ///
+  /// Fetches sections and questions in exactly two queries regardless of
+  /// how many sections the paper has — previously this ran one questions
+  /// query per section (N+1: a paper with 5 sections meant 6 round trips
+  /// just to render one screen). See docs/PERFORMANCE_AUDIT.md.
   Future<List<SectionWithQuestions>> getSectionsWithQuestions(
     String paperId,
   ) async {
@@ -70,20 +75,27 @@ class PaperRepository {
           .select()
           .eq('paper_id', paperId)
           .order('display_order');
+      final sections = sectionRows.map((r) => PaperSection.fromJson(r)).toList();
 
-      final result = <SectionWithQuestions>[];
-      for (final sRow in sectionRows) {
-        final section = PaperSection.fromJson(sRow);
+      final questionsBySectionId = <String, List<Question>>{};
+      if (sections.isNotEmpty) {
         final qRows = await SupabaseService.client
             .from('questions')
             .select('*, question_options(*)')
-            .eq('paper_section_id', section.id)
+            .inFilter('paper_section_id', sections.map((s) => s.id).toList())
             .order('display_order');
-        result.add(SectionWithQuestions(
-          section: section,
-          questions: qRows.map((q) => Question.fromJson(q)).toList(),
-        ));
+        for (final row in qRows) {
+          final question = Question.fromJson(row);
+          questionsBySectionId.putIfAbsent(question.paperSectionId, () => []).add(question);
+        }
       }
+
+      final result = sections
+          .map((section) => SectionWithQuestions(
+                section: section,
+                questions: questionsBySectionId[section.id] ?? const [],
+              ))
+          .toList();
 
       await CacheService.setJson(
         cacheKey,

@@ -147,12 +147,19 @@ See `docs/AI_TEACHER_GUIDE.md` for the full architecture, environment variables,
 
 ## Performance
 
+See `docs/PERFORMANCE_AUDIT.md` for the full audit; summary below.
+
 | Area | Status |
 |---|---|
-| Pagination on large lists | PARTIALLY COMPLETED — the admin paper list (max 24 rows) and practice question lists are small enough that client-side filtering (`PaperFilter`) is correct and simpler than server pagination; there is no true "load everything" list at a scale where this matters yet, because there is no content. Revisit if/when a phase/subject ever needs more than one paper or a subject accumulates hundreds of questions. |
-| N+1 query pattern in `PaperRepository.getSectionsWithQuestions`/`AdminRepository.getPaperContent` (one query per section) | PARTIALLY COMPLETED — correct today because a paper has at most a handful of sections; worth a single joined query (`paper_sections` + `questions` + `question_options` in one round trip) if paper structures ever grow section-heavy. Not changed here — a real behavior change to a working query path is exactly the kind of "risky architectural rewrite" the brief said to avoid without a concrete need. |
+| N+1 query pattern in `PaperRepository.getSectionsWithQuestions`/`AdminRepository.getPaperContent` (one query per section) | COMPLETED — both now fetch every section's questions in one `inFilter` query instead of one query per section. |
+| N+1 write pattern in `AdminRepository.reorderQuestions` (one UPDATE per question) | COMPLETED — replaced with a single atomic RPC (`admin_reorder_questions`, `009_performance_indexes_and_rpcs.sql`) via `update ... from unnest(...)`. |
+| Admin dashboard stats (5 queries pulling full rows to count in Dart) | COMPLETED — replaced with one aggregating RPC (`admin_dashboard_stats`) returning only the computed counts. |
+| Pagination on large/unbounded lists | COMPLETED for the two lists that actually grow unboundedly — Audit Log and Review Questionable Questions are now keyset-paginated (`lib/core/pagination/`, a reusable `PaginationNotifier<T>`), with scroll-triggered load-more and pull-to-refresh. Search gained offset-based "load more". |
+| Pagination on the papers list / a single paper's question list | **Deliberately not implemented** — `papers` is structurally capped at 24 rows (`unique(phase_id, subject_id)`, 3 phases × 8 subjects) and a single paper's question count is bounded by what a real past paper actually contains; pagination there would add complexity with no dataset that could ever need it. See `docs/PERFORMANCE_AUDIT.md` §5/§8. |
+| Missing indexes | COMPLETED — `idx_audit_logs_created_at`, `idx_questions_created_at` added (`009_performance_indexes_and_rpcs.sql`) to support the new keyset queries; everything else was already indexed in `005_indexes.sql`. |
 | Offline cache for reads | COMPLETED |
 | Startup cost | COMPLETED — splash screen is a fixed short delay, no eager loading of all content |
+| **Honest gap** | Not verified against a live Postgres instance: actual round-trip counts, `EXPLAIN`-confirmed index usage, or RPC behavior under a real non-admin JWT. Asserted from code/migration review only — see `docs/PERFORMANCE_AUDIT.md` §10. |
 
 ## Play Store readiness
 

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exception.dart';
+import '../../core/pagination/paginated_result.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/validation/content_import_validation.dart';
 import '../../core/validation/paper_status.dart';
@@ -299,14 +300,30 @@ class AdminRepository {
 
   /// Sections paired with their questions, for the quality checker and the
   /// Paper Review screen.
+  ///
+  /// Fetches every section's questions in one query (`inFilter` over all
+  /// section ids) instead of one query per section — the same N+1 fix as
+  /// PaperRepository.getSectionsWithQuestions; see docs/PERFORMANCE_AUDIT.md.
   Future<List<SectionQuestions>> getPaperContent(String paperId) async {
     final sections = await getSections(paperId);
-    final result = <SectionQuestions>[];
-    for (final section in sections) {
-      final questions = await getQuestions(section.id);
-      result.add((section: section, questions: questions));
+    if (sections.isEmpty) return const [];
+
+    final rows = await SupabaseService.client
+        .from('questions')
+        .select('*, question_options(*)')
+        .inFilter('paper_section_id', sections.map((s) => s.id).toList())
+        .order('display_order');
+
+    final questionsBySectionId = <String, List<Question>>{};
+    for (final row in rows) {
+      final question = Question.fromJson(row);
+      questionsBySectionId.putIfAbsent(question.paperSectionId, () => []).add(question);
     }
-    return result;
+
+    return sections
+        .map((section) =>
+            (section: section, questions: questionsBySectionId[section.id] ?? const <Question>[]))
+        .toList();
   }
 
   Future<PaperSection> createSection({
@@ -449,13 +466,18 @@ class AdminRepository {
   /// invalidate_verification_on_content_change trigger
   /// (006_admin_workflow.sql) demotes it to UNDER_REVIEW automatically,
   /// same as any other question edit.
+  ///
+  /// A single atomic RPC call (admin_reorder_questions,
+  /// 009_performance_indexes_and_rpcs.sql) instead of one UPDATE per
+  /// question — reordering a 30-question section previously meant 30
+  /// round trips; see docs/PERFORMANCE_AUDIT.md.
   Future<void> reorderQuestions(List<Question> orderedQuestions) async {
-    for (final q in orderedQuestions) {
-      await SupabaseService.client.from('questions').update({
-        'question_number': q.questionNumber,
-        'display_order': q.displayOrder,
-      }).eq('id', q.id);
-    }
+    if (orderedQuestions.isEmpty) return;
+    await SupabaseService.client.rpc('admin_reorder_questions', params: {
+      'p_question_ids': orderedQuestions.map((q) => q.id).toList(),
+      'p_question_numbers': orderedQuestions.map((q) => q.questionNumber).toList(),
+      'p_display_orders': orderedQuestions.map((q) => q.displayOrder).toList(),
+    });
     await _logAudit(
       action: 'REORDER',
       tableName: 'questions',
@@ -463,115 +485,99 @@ class AdminRepository {
     );
   }
 
-  /// Every non-VERIFIED question across every paper (draft or published),
-  /// for the human-review queue.
-  Future<List<Question>> getQuestionableQuestions() async {
-    final rows = await SupabaseService.client
+  /// One keyset-paginated page of non-VERIFIED questions across every
+  /// paper (draft or published), for the human-review queue. Ordered by
+  /// created_at desc, same as before, but now bounded to [limit] rows per
+  /// call instead of unconditionally loading every questionable question
+  /// in the database — see docs/PERFORMANCE_AUDIT.md.
+  Future<PaginatedResult<Question>> getQuestionableQuestionsPage({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    var query = SupabaseService.client
         .from('questions')
         .select('*, question_options(*)')
-        .neq('quality_status', 'VERIFIED')
-        .order('created_at', ascending: false);
-    return rows.map((r) => Question.fromJson(r)).toList();
+        .neq('quality_status', 'VERIFIED');
+    if (cursor != null) {
+      query = query.lt('created_at', cursor);
+    }
+    final rows = await query.order('created_at', ascending: false).limit(limit + 1);
+    final hasMore = rows.length > limit;
+    final page = hasMore ? rows.sublist(0, limit) : rows;
+    final questions = page.map((r) => Question.fromJson(r)).toList();
+    return PaginatedResult(
+      items: questions,
+      hasMore: hasMore,
+      nextCursor: rows.isEmpty ? cursor : (page.last['created_at'] as String),
+    );
   }
 
-  Future<List<AuditLog>> getRecentAuditLogs({int limit = 100}) async {
-    final rows = await SupabaseService.client
-        .from('audit_logs')
-        .select()
-        .order('created_at', ascending: false)
-        .limit(limit);
-    return rows.map((r) => AuditLog.fromJson(r)).toList();
+  /// One keyset-paginated page of the audit trail, newest first — bounded
+  /// to [limit] rows per call instead of a flat top-100 with no way to
+  /// see older entries. See docs/PERFORMANCE_AUDIT.md.
+  Future<PaginatedResult<AuditLog>> getAuditLogsPage({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    var query = SupabaseService.client.from('audit_logs').select();
+    if (cursor != null) {
+      query = query.lt('created_at', cursor);
+    }
+    final rows = await query.order('created_at', ascending: false).limit(limit + 1);
+    final hasMore = rows.length > limit;
+    final page = hasMore ? rows.sublist(0, limit) : rows;
+    final logs = page.map((r) => AuditLog.fromJson(r)).toList();
+    return PaginatedResult(
+      items: logs,
+      hasMore: hasMore,
+      nextCursor: rows.isEmpty ? cursor : (page.last['created_at'] as String),
+    );
   }
 
   /// Real database-derived counts for the admin dashboard — no field here
   /// is ever estimated or hard-coded; an empty database yields all zeros.
+  ///
+  /// A single RPC call (admin_dashboard_stats,
+  /// 009_performance_indexes_and_rpcs.sql) that computes every count
+  /// server-side, instead of 5 separate queries that each pulled every
+  /// matching row's full columns to the client just to count them in
+  /// Dart — see docs/PERFORMANCE_AUDIT.md.
   Future<AdminDashboardStats> getDashboardStats() async {
-    final client = SupabaseService.client;
+    final response = await SupabaseService.client.rpc('admin_dashboard_stats');
+    final stats = response as Map<String, dynamic>;
 
-    final paperRows = await client.from('papers').select('content_status, source_file_url');
-    var draft = 0, needsReview = 0, verified = 0, published = 0, archived = 0, missingSource = 0;
-    for (final row in paperRows) {
-      final status = row['content_status'] as String?;
-      final hasSource = (row['source_file_url'] as String?)?.isNotEmpty ?? false;
-      if (!hasSource && status == PaperStatus.draft) missingSource++;
-      switch (status) {
-        case PaperStatus.draft:
-          draft++;
-        case PaperStatus.underReview:
-          needsReview++;
-        case PaperStatus.verified:
-          verified++;
-        case PaperStatus.published:
-          published++;
-        case PaperStatus.archived:
-          archived++;
-      }
-    }
-
-    final publishedPapersRows = await client
-        .from('papers')
-        .select('phase_id, phases(name)')
-        .eq('content_status', 'PUBLISHED');
+    final publishedByPhaseIdName = (stats['published_by_phase_name'] as Map<String, dynamic>? ?? {});
     final publishedByPhaseName = <String, int>{
       for (final name in AppConstants.phaseNames.values) name: 0,
     };
-    for (final row in publishedPapersRows) {
-      final phase = row['phases'] as Map<String, dynamic>?;
-      final name = phase?['name'] as String?;
-      if (name != null && publishedByPhaseName.containsKey(name)) {
-        publishedByPhaseName[name] = publishedByPhaseName[name]! + 1;
+    for (final entry in publishedByPhaseIdName.entries) {
+      if (publishedByPhaseName.containsKey(entry.key)) {
+        publishedByPhaseName[entry.key] = (entry.value as num).toInt();
       }
     }
 
-    final subjectRows = await client.from('subjects').select('id');
-    final userRows = await client.from('profiles').select('id');
-
-    final questionRows = await client.from('questions').select('question_type, quality_status');
-    var mcq = 0, short = 0, long = 0;
-    var qVerified = 0, questionable = 0, ocrUncertain = 0, paperError = 0, answerUncertain = 0;
-    for (final row in questionRows) {
-      switch (row['question_type']) {
-        case 'mcq':
-          mcq++;
-        case 'short':
-          short++;
-        case 'long':
-          long++;
-      }
-      switch (row['quality_status']) {
-        case 'VERIFIED':
-          qVerified++;
-        case 'QUESTIONABLE':
-          questionable++;
-        case 'OCR_UNCERTAIN':
-          ocrUncertain++;
-        case 'PAPER_ERROR':
-          paperError++;
-        case 'ANSWER_UNCERTAIN':
-          answerUncertain++;
-      }
-    }
+    int count(String key) => (stats[key] as num?)?.toInt() ?? 0;
 
     return AdminDashboardStats(
-      totalPapers: paperRows.length,
-      draftPapers: draft,
-      needsReviewPapers: needsReview,
-      verifiedPapers: verified,
-      publishedPapers: published,
-      archivedPapers: archived,
-      missingSourcePapers: missingSource,
+      totalPapers: count('total_papers'),
+      draftPapers: count('draft_papers'),
+      needsReviewPapers: count('needs_review_papers'),
+      verifiedPapers: count('verified_papers'),
+      publishedPapers: count('published_papers'),
+      archivedPapers: count('archived_papers'),
+      missingSourcePapers: count('missing_source_papers'),
       publishedByPhaseName: publishedByPhaseName,
-      totalSubjects: subjectRows.length,
-      totalQuestions: questionRows.length,
-      mcqCount: mcq,
-      shortCount: short,
-      longCount: long,
-      verifiedQuestionCount: qVerified,
-      questionableCount: questionable,
-      ocrUncertainCount: ocrUncertain,
-      paperErrorCount: paperError,
-      answerUncertainCount: answerUncertain,
-      totalUsers: userRows.length,
+      totalSubjects: count('total_subjects'),
+      totalQuestions: count('total_questions'),
+      mcqCount: count('mcq_count'),
+      shortCount: count('short_count'),
+      longCount: count('long_count'),
+      verifiedQuestionCount: count('verified_question_count'),
+      questionableCount: count('questionable_count'),
+      ocrUncertainCount: count('ocr_uncertain_count'),
+      paperErrorCount: count('paper_error_count'),
+      answerUncertainCount: count('answer_uncertain_count'),
+      totalUsers: count('total_users'),
     );
   }
 

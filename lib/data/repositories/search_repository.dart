@@ -1,3 +1,4 @@
+import '../../core/pagination/paginated_result.dart';
 import '../../core/services/supabase_service.dart';
 import '../models/question.dart';
 
@@ -14,10 +15,25 @@ class SearchResultItem {
 }
 
 class SearchRepository {
-  /// Full-text-ish search across question text, explanations, and MCQ
-  /// options for published content only.
-  Future<List<SearchResultItem>> search(String query) async {
-    if (query.trim().length < 2) return [];
+  /// Full-text-ish search across question text and explanations for
+  /// published content only, server-side (the `ilike` filter and the
+  /// `content_status` join both run in Postgres — this never downloads
+  /// the question table and filters it in Flutter) and backed by the
+  /// trigram indexes in 005_indexes.sql.
+  ///
+  /// Offset-paginated (not keyset — search result ranking has no stable
+  /// sort key to key off, unlike the time-ordered admin lists) so a
+  /// "Load more" action fetches only the next [limit] results instead of
+  /// re-running the whole query with a bigger limit. Kept as a page
+  /// count matching [PaginatedResult.hasMore]'s "N+1 rows" technique.
+  Future<PaginatedResult<SearchResultItem>> search(
+    String query, {
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    if (query.trim().length < 2) {
+      return const PaginatedResult(items: [], hasMore: false);
+    }
     final rows = await SupabaseService.client
         .from('questions')
         .select(
@@ -25,9 +41,11 @@ class SearchRepository {
         )
         .eq('paper_sections.papers.content_status', 'PUBLISHED')
         .or('question_text.ilike.%$query%,explanation.ilike.%$query%')
-        .limit(50);
+        .range(offset, offset + limit);
 
-    return rows.map((r) {
+    final hasMore = rows.length > limit;
+    final page = hasMore ? rows.sublist(0, limit) : rows;
+    final items = page.map((r) {
       final paperSection = r['paper_sections'] as Map<String, dynamic>;
       final paper = paperSection['papers'] as Map<String, dynamic>;
       final phase = paper['phases'] as Map<String, dynamic>?;
@@ -38,5 +56,6 @@ class SearchRepository {
         subjectName: subject?['name'] as String? ?? '',
       );
     }).toList();
+    return PaginatedResult(items: items, hasMore: hasMore);
   }
 }

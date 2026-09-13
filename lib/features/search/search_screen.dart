@@ -17,8 +17,11 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   final _debouncer = Debouncer(delay: AppConstants.searchDebounce);
+  static const _pageSize = 20;
   String _query = '';
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
   List<SearchResultItem> _results = [];
   String? _error;
 
@@ -37,14 +40,41 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         _error = null;
       });
       try {
-        final results = await ref.read(searchRepositoryProvider).search(value);
-        if (mounted) setState(() => _results = results);
+        final page = await ref.read(searchRepositoryProvider).search(value, limit: _pageSize);
+        if (mounted) {
+          setState(() {
+            _results = page.items;
+            _hasMore = page.hasMore;
+          });
+        }
       } catch (e) {
         if (mounted) setState(() => _error = e.toString());
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
     });
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return; // no duplicate concurrent loads
+    setState(() => _isLoadingMore = true);
+    try {
+      final page = await ref.read(searchRepositoryProvider).search(
+            _query,
+            offset: _results.length,
+            limit: _pageSize,
+          );
+      if (mounted) {
+        setState(() {
+          _results = [..._results, ...page.items];
+          _hasMore = page.hasMore;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
   }
 
   @override
@@ -80,19 +110,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (_results.isEmpty) {
       return const EmptyState(icon: Icons.search_off, title: 'No results found');
     }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final item = _results[index];
-        return Card(
-          child: ListTile(
-            title: _highlightedText(item.question.questionText, _query),
-            subtitle: Text('${item.phaseName} • ${item.subjectName}'),
-          ),
-        );
+    return NotificationListener<ScrollEndNotification>(
+      onNotification: (notification) {
+        final metrics = notification.metrics;
+        if (metrics.pixels >= metrics.maxScrollExtent - 200) _loadMore();
+        return false;
       },
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _results.length + (_isLoadingMore ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          if (index == _results.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final item = _results[index];
+          return Card(
+            child: ListTile(
+              title: _highlightedText(item.question.questionText, _query),
+              subtitle: Text('${item.phaseName} • ${item.subjectName}'),
+            ),
+          );
+        },
+      ),
     );
   }
 
