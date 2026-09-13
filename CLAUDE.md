@@ -124,10 +124,20 @@ the rules those guides must keep following, not the how-to.
 - `ai_messages.content_kind` is the single source of truth for
   verified-vs-AI-generated labeling (`VERIFIED_ANSWER` /
   `AI_GENERATED_EXPLANATION_BASED_ON_VERIFIED` / `AI_GENERATED_ANSWER` /
-  `GENERAL`, DB CHECK-constrained). Never introduce a second,
-  independent way to decide whether something is "verified" in the AI
-  Teacher UI — always derive the label from this column via
-  `AiContentKindX.label`.
+  `AI_GENERATED_PRACTICE` / `GENERAL`, DB CHECK-constrained). Never
+  introduce a second, independent way to decide whether something is
+  "verified" in the AI Teacher UI — always derive the label from this
+  column via `AiContentKindX.label`, and the secondary "NEEDS REVIEW"
+  badge via `AiContentKindX.needsReviewBadge`.
+- `make_quiz`/`similar_questions` responses are always
+  `AI_GENERATED_PRACTICE`, never `AI_GENERATED_ANSWER` — generated
+  practice questions must never be written into `questions`/
+  `paper_sections`; they only ever live as `ai_messages` rows.
+- `AiDiscrepancyDetector` (client-side) and the system prompt's
+  `Correct Answer is LETTER.` convention for MCQ explanations are a
+  matched pair — if the convention's wording changes in the system
+  prompt, update the detector's regex in the same change, or it will
+  silently stop catching discrepancies.
 - The Edge Function must fetch verified question/answer context through
   a JWT-scoped Supabase client (respecting RLS), never the service-role
   client — this is what structurally guarantees the AI is never handed

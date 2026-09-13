@@ -139,6 +139,8 @@ class QuestionTile extends ConsumerWidget {
                       questionId: question.id,
                       questionPreview: question.questionText,
                       isMcq: question.questionType.name == 'mcq',
+                      verifiedAnswer:
+                          question.questionType.name == 'mcq' ? question.verifiedAnswer : null,
                     ),
                   ),
                   icon: const Icon(Icons.smart_toy_outlined, size: 18),

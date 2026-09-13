@@ -100,6 +100,55 @@ void main() {
     });
   });
 
+  group('AiContentKind — practice content and the NEEDS REVIEW badge', () {
+    test('AI_GENERATED_PRACTICE gets its own distinct label, never confused with a real answer', () {
+      final kind = AiContentKindX.fromString('AI_GENERATED_PRACTICE');
+      expect(kind, AiContentKind.aiGeneratedPractice);
+      expect(kind.label, 'AI-GENERATED PRACTICE');
+      expect(kind.label.contains('ANSWER'), isFalse);
+    });
+
+    test('needsReviewBadge is true for ungrounded AI content (answer, practice)', () {
+      expect(AiContentKind.aiGeneratedAnswer.needsReviewBadge, isTrue);
+      expect(AiContentKind.aiGeneratedPractice.needsReviewBadge, isTrue);
+    });
+
+    test('needsReviewBadge is false for verified-grounded or raw verified content', () {
+      expect(AiContentKind.aiGeneratedExplanationBasedOnVerified.needsReviewBadge, isFalse);
+      expect(AiContentKind.verifiedAnswer.needsReviewBadge, isFalse);
+    });
+  });
+
+  group('AiDiscrepancyDetector — verified content must have priority', () {
+    test('flags a mismatch between the AI\'s stated answer and the verified answer', () {
+      expect(
+        AiDiscrepancyDetector.hasDiscrepancy('Correct Answer is C.\nBecause...', 'B'),
+        isTrue,
+      );
+    });
+
+    test('does not flag when the AI\'s stated answer matches the verified answer', () {
+      expect(
+        AiDiscrepancyDetector.hasDiscrepancy('Correct Answer is B.\nBecause...', 'B'),
+        isFalse,
+      );
+    });
+
+    test('comparison is case-insensitive', () {
+      expect(
+        AiDiscrepancyDetector.hasDiscrepancy('correct answer is b.\nBecause...', 'B'),
+        isFalse,
+      );
+    });
+
+    test('never flags a discrepancy when no clear statement is found', () {
+      expect(
+        AiDiscrepancyDetector.hasDiscrepancy('This concept relates to formative assessment.', 'B'),
+        isFalse,
+      );
+    });
+  });
+
   group('AiTeacherActionX — quick action sets never overlap incorrectly', () {
     test('every action has a non-empty label and dbValue', () {
       for (final action in AiTeacherAction.values) {

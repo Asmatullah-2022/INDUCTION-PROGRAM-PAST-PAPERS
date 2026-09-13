@@ -1,3 +1,4 @@
+import 'package:async/async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import '../../core/errors/app_exception.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../core/validation/ai_teacher_validation.dart';
 import '../../data/models/ai_message.dart';
+import '../../data/repositories/ai_teacher_repository.dart';
 import 'ai_teacher_context.dart';
 
 class _ChatEntry {
@@ -15,12 +17,20 @@ class _ChatEntry {
   final String content;
   final AiContentKind? contentKind;
   final bool isError;
+  final bool isDiscrepancy;
+
+  /// Only set on user entries — lets [_AiTeacherScreenState._regenerate]
+  /// re-send the exact same action without the caller having to track it
+  /// separately.
+  final AiTeacherAction? action;
 
   const _ChatEntry({
     required this.role,
     required this.content,
     this.contentKind,
     this.isError = false,
+    this.isDiscrepancy = false,
+    this.action,
   });
 }
 
@@ -47,6 +57,12 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
   String? _lastFailedMessage;
   AiTeacherAction? _lastFailedAction;
 
+  /// Bumped on every new send and on Stop, so a superseded/cancelled
+  /// request's `finally` block can tell it's no longer the active one and
+  /// avoid clobbering a later request's loading state.
+  int _generation = 0;
+  CancelableOperation<AiTeacherResponse>? _activeOperation;
+
   @override
   void dispose() {
     _inputController.dispose();
@@ -68,7 +84,11 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
     });
   }
 
-  Future<void> _send(AiTeacherAction action, {String? textOverride}) async {
+  Future<void> _send(
+    AiTeacherAction action, {
+    String? textOverride,
+    bool appendUserEntry = true,
+  }) async {
     final text = (textOverride ?? _inputController.text).trim();
     // A quick-action tap with no free-text override sends the action's
     // own label as the message (e.g. "Exam Tip"); only the free-text
@@ -86,9 +106,10 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
     // Set the pending state and the user's own bubble synchronously,
     // before any await, so the UI gives immediate feedback on tap rather
     // than waiting on the connectivity check first.
+    final generation = ++_generation;
     setState(() {
-      if (text.isNotEmpty) {
-        _entries.add(_ChatEntry(role: AiMessageRole.user, content: text));
+      if (appendUserEntry && text.isNotEmpty) {
+        _entries.add(_ChatEntry(role: AiMessageRole.user, content: text, action: action));
       }
       _isSending = true;
       _lastFailedMessage = null;
@@ -98,6 +119,7 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
     _scrollToBottom();
 
     final isOnline = await ref.read(connectivityServiceProvider).isOnline();
+    if (generation != _generation) return; // stopped/superseded while checking connectivity
     if (!isOnline) {
       setState(() {
         _isSending = false;
@@ -111,15 +133,25 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
       return;
     }
 
-    try {
-      final response = await ref.read(aiTeacherRepositoryProvider).sendMessage(
+    // Wrapped in CancelableOperation so Stop Generation has something
+    // concrete to cancel — see _stopGeneration for what this can and
+    // cannot actually stop.
+    final operation = CancelableOperation<AiTeacherResponse>.fromFuture(
+      ref.read(aiTeacherRepositoryProvider).sendMessage(
             action: action,
             message: text.isEmpty ? action.label : text,
             language: _language,
             conversationId: _conversationId,
             paperId: widget.context0?.paperId,
             questionId: widget.context0?.questionId,
-          );
+          ),
+    );
+    _activeOperation = operation;
+
+    try {
+      final response = await operation.valueOrCancellation();
+      if (response == null) return; // cancelled by _stopGeneration
+      if (generation != _generation) return;
       setState(() {
         _conversationId = response.conversationId;
         _entries.add(_ChatEntry(
@@ -127,14 +159,17 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
           content: response.assistantMessage.content,
           contentKind: response.assistantMessage.contentKind,
         ));
+        _appendDiscrepancyNoticeIfAny(response.assistantMessage);
       });
     } on AppException catch (e) {
+      if (generation != _generation) return;
       setState(() {
         _entries.add(_ChatEntry(role: AiMessageRole.assistant, content: e.message, isError: true));
         _lastFailedMessage = text.isEmpty ? action.label : text;
         _lastFailedAction = action;
       });
     } catch (e) {
+      if (generation != _generation) return;
       setState(() {
         _entries.add(const _ChatEntry(
           role: AiMessageRole.assistant,
@@ -145,9 +180,45 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
         _lastFailedAction = action;
       });
     } finally {
-      if (mounted) setState(() => _isSending = false);
+      if (mounted && generation == _generation) setState(() => _isSending = false);
       _scrollToBottom();
     }
+  }
+
+  /// Client-side half of the "verified content has priority" rule — see
+  /// AiDiscrepancyDetector's doc comment. Only checked for a question
+  /// opened in MCQ context where the app itself holds a verified answer.
+  void _appendDiscrepancyNoticeIfAny(AiMessage assistantMessage) {
+    final verifiedAnswer = widget.context0?.verifiedAnswer;
+    if (widget.context0?.isMcq != true || verifiedAnswer == null) return;
+    if (!AiDiscrepancyDetector.hasDiscrepancy(assistantMessage.content, verifiedAnswer)) return;
+    _entries.add(const _ChatEntry(
+      role: AiMessageRole.assistant,
+      content: 'Potential discrepancy detected. The stored answer is marked VERIFIED. '
+          'Please refer to the source paper or administrator verification.',
+      isDiscrepancy: true,
+    ));
+  }
+
+  /// Stops waiting on the in-flight request. The Supabase functions
+  /// client has no cancellation hook, so the actual HTTP call to the
+  /// Edge Function (and the provider call behind it) is NOT aborted —
+  /// this only stops the UI from waiting for or displaying its result,
+  /// which is the safest client-side cancellation available with this
+  /// transport. See docs/AI_TEACHER_GUIDE.md "Stop Generation".
+  void _stopGeneration() {
+    if (!_isSending) return;
+    _generation++; // invalidate the in-flight request before it resolves
+    _activeOperation?.cancel();
+    setState(() {
+      _isSending = false;
+      _entries.add(const _ChatEntry(
+        role: AiMessageRole.assistant,
+        content: 'Generation stopped.',
+        isError: true,
+      ));
+    });
+    _scrollToBottom();
   }
 
   void _retry() {
@@ -155,10 +226,68 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
     final action = _lastFailedAction;
     if (message == null || action == null) return;
     setState(() => _entries.removeLast()); // drop the error bubble before retrying
-    _send(action, textOverride: message);
+    _send(action, textOverride: message, appendUserEntry: false);
   }
 
-  void _clearChat() {
+  void _regenerate() {
+    _ChatEntry? lastUser;
+    for (final entry in _entries.reversed) {
+      if (entry.role == AiMessageRole.user) {
+        lastUser = entry;
+        break;
+      }
+    }
+    if (lastUser == null || lastUser.action == null) return;
+    setState(() {
+      // Drop the trailing assistant reply (and any discrepancy notice)
+      // so the regenerated answer replaces it, without touching the
+      // user's own message or re-sending it as a duplicate bubble.
+      while (_entries.isNotEmpty && _entries.last.role == AiMessageRole.assistant) {
+        _entries.removeLast();
+      }
+    });
+    _send(lastUser.action!, textOverride: lastUser.content, appendUserEntry: false);
+  }
+
+  /// Starts a fresh conversation. The previous conversation is not
+  /// deleted — it stays reachable from Conversation History, because its
+  /// messages are already persisted server-side under their own
+  /// conversationId. This only resets local view state.
+  void _newConversation() {
+    setState(() {
+      _entries.clear();
+      _conversationId = null;
+      _lastFailedMessage = null;
+      _lastFailedAction = null;
+    });
+  }
+
+  /// Destructively clears the current conversation after confirmation —
+  /// unlike New Conversation, this deletes the underlying conversation
+  /// (if one has been created) so it no longer appears in history either.
+  Future<void> _confirmClearChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear this conversation?'),
+        content: const Text('This removes the current conversation and cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final conversationId = _conversationId;
+    if (conversationId != null) {
+      await ref.read(aiTeacherRepositoryProvider).deleteConversation(conversationId);
+    }
+    if (!mounted) return;
     setState(() {
       _entries.clear();
       _conversationId = null;
@@ -185,6 +314,8 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
     final actions = _hasQuestionContext
         ? AiTeacherActionX.questionContextActions
         : AiTeacherActionX.generalActions;
+    final lastAssistantIndex =
+        _entries.lastIndexWhere((e) => e.role == AiMessageRole.assistant && !e.isError);
 
     return Scaffold(
       appBar: AppBar(
@@ -203,8 +334,10 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
           PopupMenuButton<String>(
             onSelected: (value) {
               switch (value) {
-                case 'clear':
-                  _clearChat();
+                case 'new_conversation':
+                  _newConversation();
+                case 'clear_chat':
+                  _confirmClearChat();
                 case 'copy':
                   _copyLast();
                 case 'share':
@@ -214,7 +347,8 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'copy', child: Text('Copy last response')),
               PopupMenuItem(value: 'share', child: Text('Share last response')),
-              PopupMenuItem(value: 'clear', child: Text('Clear chat / New conversation')),
+              PopupMenuItem(value: 'new_conversation', child: Text('New Conversation')),
+              PopupMenuItem(value: 'clear_chat', child: Text('Clear Chat')),
             ],
           ),
         ],
@@ -236,7 +370,8 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
                       final entry = _entries[index];
                       return _MessageBubble(
                         entry: entry,
-                        onRetry: entry.isError && index == _entries.length - 1 ? _retry : null,
+                        onRetry: entry.isError && !_isSending && index == _entries.length - 1 ? _retry : null,
+                        onRegenerate: !_isSending && index == lastAssistantIndex ? _regenerate : null,
                       );
                     },
                   ),
@@ -248,8 +383,9 @@ class _AiTeacherScreenState extends ConsumerState<AiTeacherScreen> {
           ),
           _InputBar(
             controller: _inputController,
-            enabled: !_isSending,
+            isSending: _isSending,
             onSend: () => _send(AiTeacherAction.ask),
+            onStop: _stopGeneration,
           ),
         ],
       ),
@@ -343,19 +479,21 @@ class _LoadingBubble extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final _ChatEntry entry;
   final VoidCallback? onRetry;
+  final VoidCallback? onRegenerate;
 
-  const _MessageBubble({required this.entry, this.onRetry});
+  const _MessageBubble({required this.entry, this.onRetry, this.onRegenerate});
 
   @override
   Widget build(BuildContext context) {
     final isUser = entry.role == AiMessageRole.user;
     final scheme = Theme.of(context).colorScheme;
-    final bubbleColor = entry.isError
+    final flagged = entry.isError || entry.isDiscrepancy;
+    final bubbleColor = flagged
         ? scheme.errorContainer
         : isUser
             ? scheme.primaryContainer
             : scheme.surfaceContainerLow;
-    final textColor = entry.isError
+    final textColor = flagged
         ? scheme.onErrorContainer
         : isUser
             ? scheme.onPrimaryContainer
@@ -382,9 +520,16 @@ class _MessageBubble extends StatelessWidget {
                       : Colors.orange.shade800,
                 ),
               ),
+              if (entry.contentKind!.needsReviewBadge)
+                Text(
+                  'NEEDS REVIEW',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: scheme.error),
+                ),
               const SizedBox(height: 4),
             ],
-            Text(entry.content, style: TextStyle(color: textColor)),
+            entry.isError || entry.isDiscrepancy
+                ? Text(entry.content, style: TextStyle(color: textColor))
+                : _MarkdownLiteText(text: entry.content, style: TextStyle(color: textColor)),
             if (onRetry != null) ...[
               const SizedBox(height: 8),
               TextButton.icon(
@@ -393,10 +538,114 @@ class _MessageBubble extends StatelessWidget {
                 label: const Text('Retry'),
               ),
             ],
+            if (onRegenerate != null) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: onRegenerate,
+                icon: const Icon(Icons.autorenew, size: 16),
+                label: const Text('Regenerate'),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+/// A deliberately small markdown-lite renderer — headings (`### `),
+/// bullet lists (`- `/`* `), numbered lists (`1. `), and inline `**bold**`
+/// — covering what AI Teacher responses actually use, without pulling in
+/// a full markdown package. Not a general-purpose renderer: no tables,
+/// links, or code fences. See docs/AI_TEACHER_GUIDE.md.
+class _MarkdownLiteText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _MarkdownLiteText({required this.text, this.style});
+
+  static final _bulletPattern = RegExp(r'^[-*]\s+(.*)');
+  static final _numberedPattern = RegExp(r'^(\d+)\.\s+(.*)');
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = text.split('\n');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: lines.map((line) {
+        if (line.trim().isEmpty) return const SizedBox(height: 6);
+
+        if (line.startsWith('### ')) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              line.substring(4),
+              style: (style ?? const TextStyle()).copyWith(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+          );
+        }
+
+        final bulletMatch = _bulletPattern.firstMatch(line);
+        if (bulletMatch != null) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('•  ', style: style),
+                Expanded(child: _InlineBoldText(text: bulletMatch.group(1)!, style: style)),
+              ],
+            ),
+          );
+        }
+
+        final numberedMatch = _numberedPattern.firstMatch(line);
+        if (numberedMatch != null) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${numberedMatch.group(1)}.  ', style: style),
+                Expanded(child: _InlineBoldText(text: numberedMatch.group(2)!, style: style)),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: _InlineBoldText(text: line, style: style),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _InlineBoldText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _InlineBoldText({required this.text, this.style});
+
+  static final _boldPattern = RegExp(r'\*\*(.+?)\*\*');
+
+  @override
+  Widget build(BuildContext context) {
+    final base = style ?? DefaultTextStyle.of(context).style;
+    final spans = <InlineSpan>[];
+    var last = 0;
+    for (final match in _boldPattern.allMatches(text)) {
+      if (match.start > last) spans.add(TextSpan(text: text.substring(last, match.start)));
+      spans.add(TextSpan(text: match.group(1), style: const TextStyle(fontWeight: FontWeight.w700)));
+      last = match.end;
+    }
+    if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
+    // Text.rich (not a bare RichText) so widget/integration tests using
+    // find.text() — which only inspects Text widgets — can still find
+    // this content, matching against the span tree's plain text.
+    return Text.rich(TextSpan(style: base, children: spans));
   }
 }
 
@@ -430,10 +679,16 @@ class _QuickActionsRow extends StatelessWidget {
 
 class _InputBar extends StatelessWidget {
   final TextEditingController controller;
-  final bool enabled;
+  final bool isSending;
   final VoidCallback onSend;
+  final VoidCallback onStop;
 
-  const _InputBar({required this.controller, required this.enabled, required this.onSend});
+  const _InputBar({
+    required this.controller,
+    required this.isSending,
+    required this.onSend,
+    required this.onStop,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -445,21 +700,27 @@ class _InputBar extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
-                enabled: enabled,
+                enabled: !isSending,
                 minLines: 1,
                 maxLines: 4,
                 decoration: const InputDecoration(
                   hintText: 'Ask AI Teacher...',
                   isDense: true,
                 ),
-                onSubmitted: enabled ? (_) => onSend() : null,
+                onSubmitted: isSending ? null : (_) => onSend(),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: enabled ? onSend : null,
-              icon: const Icon(Icons.send),
-            ),
+            isSending
+                ? IconButton.filled(
+                    onPressed: onStop,
+                    tooltip: 'Stop generation',
+                    icon: const Icon(Icons.stop),
+                  )
+                : IconButton.filled(
+                    onPressed: onSend,
+                    icon: const Icon(Icons.send),
+                  ),
           ],
         ),
       ),

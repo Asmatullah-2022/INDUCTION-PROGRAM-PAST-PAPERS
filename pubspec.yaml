@@ -41,6 +41,9 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.4
 
+  # AI Teacher: CancelableOperation, used for client-side "Stop Generation"
+  async: ^2.11.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

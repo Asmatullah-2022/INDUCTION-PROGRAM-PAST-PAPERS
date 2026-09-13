@@ -145,6 +145,37 @@ class AiTeacherErrorMapper {
   }
 }
 
+/// Detects a stated MCQ option letter in an AI explanation that
+/// contradicts the app's own verified answer — the client-side half of
+/// the "verified content has priority" rule (see CLAUDE.md "AI Teacher
+/// Rules"). This is a UX safety net over text the backend already
+/// returned, not a security control: the Edge Function never lets the AI
+/// overwrite a verified answer in the database, this only flags the
+/// (hopefully rare) case where the model's own wording disagrees with it
+/// so the user is warned rather than silently misled. Relies on the
+/// system prompt's `Correct Answer is LETTER.` convention (rule 12 in
+/// supabase/functions/ai-teacher/index.ts) — if the AI doesn't follow
+/// that convention, this simply finds nothing and never flags a false
+/// discrepancy.
+class AiDiscrepancyDetector {
+  AiDiscrepancyDetector._();
+
+  static final RegExp _statedAnswerPattern = RegExp(
+    r'correct\s+answer\s+is[:\s]+\(?([A-Da-d])\)?',
+    caseSensitive: false,
+  );
+
+  /// Returns true only when the AI text explicitly states an option
+  /// letter that differs from [verifiedAnswer]. Never flags when no clear
+  /// statement is found.
+  static bool hasDiscrepancy(String aiText, String verifiedAnswer) {
+    final match = _statedAnswerPattern.firstMatch(aiText);
+    final stated = match?.group(1);
+    if (stated == null) return false;
+    return stated.toUpperCase() != verifiedAnswer.trim().toUpperCase();
+  }
+}
+
 /// Pure request validation mirroring the Edge Function's own checks
 /// (message required, max length) — see 007_ai_teacher.sql /
 /// supabase/functions/ai-teacher/index.ts. Client-side validation here is

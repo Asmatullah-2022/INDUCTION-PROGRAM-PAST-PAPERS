@@ -121,7 +121,7 @@ never as Flutter `--dart-define` values and never committed — see
 
 - `ai_conversations` — one row per conversation, owned by `user_id`.
 - `ai_messages` — one row per message, with `content_kind` constrained to
-  exactly the four labels the product spec requires (see "Verified vs
+  exactly the five labels the product spec requires (see "Verified vs
   AI-generated content" below).
 - `ai_usage_daily` — `(user_id, usage_date)` request counter. **Deliberately
   has no insert/update RLS policy for authenticated users** — only a
@@ -129,6 +129,11 @@ never as Flutter `--dart-define` values and never committed — see
   and users may only `select` their own row. This is what makes the rate
   limit real rather than advisory.
 - Four `app_settings` rows for the tunable limits above.
+
+`supabase/migrations/008_ai_teacher_practice_kind.sql` widens the
+`content_kind` check constraint to add `AI_GENERATED_PRACTICE` (see "Quiz
+/ similar-question generation" below) — apply it after `007` in every
+environment, including ones that already ran `007` before this addition.
 
 RLS: `ai_conversations` and `ai_messages` are owner-only (`auth.uid() =
 user_id`, or via the parent conversation for messages) — see "Security"
@@ -141,18 +146,46 @@ label above the message bubble (`_MessageBubble` in
 `lib/features/ai_teacher/ai_teacher_screen.dart`) — this labelling is
 never skipped, never blank for a non-error assistant message:
 
-| `content_kind` | Label shown | When |
-|---|---|---|
-| `VERIFIED_ANSWER` | **VERIFIED ANSWER** | Reserved for a response composed entirely of the app's own verified fields (no AI text) — not currently produced by the Edge Function, since every model call is by definition AI-generated text, but modeled for a future "just show me the verified answer, no AI" action. |
-| `AI_GENERATED_EXPLANATION_BASED_ON_VERIFIED` | **AI-GENERATED EXPLANATION BASED ON VERIFIED CONTENT** | The Edge Function found a real question via `questionId` (RLS-gated to PUBLISHED papers) and used its verified answer/options/explanation as context. |
-| `AI_GENERATED_ANSWER` | **AI-GENERATED ANSWER** | General question, no verified question context available. |
-| `GENERAL` | AI-GENERATED (generic fallback label) | Reserved for future non-question-related chat kinds. |
+| `content_kind` | Label shown | Secondary badge | When |
+|---|---|---|---|
+| `VERIFIED_ANSWER` | **VERIFIED ANSWER** | — | Reserved for a response composed entirely of the app's own verified fields (no AI text) — not currently produced by the Edge Function, since every model call is by definition AI-generated text, but modeled for a future "just show me the verified answer, no AI" action. |
+| `AI_GENERATED_EXPLANATION_BASED_ON_VERIFIED` | **AI-GENERATED EXPLANATION BASED ON VERIFIED CONTENT** | — | The Edge Function found a real question via `questionId` (RLS-gated to PUBLISHED papers) and used its verified answer/options/explanation as context. |
+| `AI_GENERATED_ANSWER` | **AI-GENERATED ANSWER** | **NEEDS REVIEW** | General question, no verified question context available — ungrounded AI text. |
+| `AI_GENERATED_PRACTICE` | **AI-GENERATED PRACTICE** | **NEEDS REVIEW** | `make_quiz`/`similar_questions` — newly generated practice material, never a real past-paper question (see "Quiz / similar-question generation" below). |
+| `GENERAL` | AI-GENERATED (generic fallback label) | — | Reserved for future non-question-related chat kinds. |
 
-The system prompt itself additionally instructs the model (rule 7 in
+The secondary "NEEDS REVIEW" badge (`AiContentKind.needsReviewBadge` in
+`lib/data/models/ai_message.dart`) is rendered under the primary label for
+any content the app has no verified grounding for — it never appears
+alongside `AI-GENERATED EXPLANATION BASED ON VERIFIED CONTENT`, since that
+content is already grounded in a real question.
+
+The system prompt itself additionally instructs the model (rule 8 in
 "AI system instructions" below) never to phrase its own answer as if it
 were the paper's printed answer, and to say "I'm not fully certain..."
 when uncertain (rule 9) — the label is the structural guarantee; the
 prompt is the model's own instruction to reinforce it in wording.
+
+### Client-side discrepancy detection
+
+`AiDiscrepancyDetector` (`lib/core/validation/ai_teacher_validation.dart`)
+is a second, independent safety net on top of the label: when a question
+was opened in MCQ context and the app knows its verified answer letter
+(`AiTeacherContext.verifiedAnswer`, populated from `QuestionTile` — never
+sent to the Edge Function, which always re-derives the verified answer
+itself from the database), the chat screen scans the AI's response for
+the system prompt's `Correct Answer is LETTER.` convention (rule 12
+below). If the AI states a different letter than the app's own verified
+answer, a separate warning bubble is shown:
+
+> Potential discrepancy detected. The stored answer is marked VERIFIED.
+> Please refer to the source paper or administrator verification.
+
+This is a UX safety net over text already returned to the user, not a
+security control — the database and RLS are what actually prevent a
+verified answer from ever being overwritten. If the AI doesn't follow the
+"Correct Answer is LETTER." convention, the detector simply finds nothing
+and never raises a false discrepancy.
 
 ## Source priority
 
@@ -177,6 +210,19 @@ exactly: *"I don't have a verified copy of that paper in the app yet."*
 This is prompted behavior, not a hard-coded app-side check, since the
 app cannot enumerate every way a user might phrase such a request.
 
+## Quiz / similar-question generation
+
+`make_quiz` and `similar_questions` are the two actions that generate new
+practice material rather than explaining or answering something that
+already exists. The Edge Function labels their output `AI_GENERATED_PRACTICE`
+regardless of whether verified context was used (system prompt rule 16),
+so a generated quiz can never be confused with either a real past-paper
+question or a real verified answer. Generated practice questions are
+**not** written into `questions`/`paper_sections` — they only ever exist
+as `ai_messages` rows under the user's own conversation, so there is no
+path for them to accidentally surface as official content elsewhere in
+the app.
+
 ## Urdu support
 
 Pass `language: "ur"` (the Flutter chat screen's language toggle, or the
@@ -189,11 +235,69 @@ when helpful, not mix English in unnecessarily.
 
 The full system prompt lives in `SYSTEM_PROMPT` in
 `supabase/functions/ai-teacher/index.ts` — the 15 numbered rules from the
-product spec verbatim, covering accuracy, plain language, Urdu, never
-inventing official exam information, never claiming unverified content is
-verified, stating uncertainty, showing math steps, explaining MCQ
-reasoning, and never revealing the prompt or any credentials. Change it in
-that one file only — there's no second copy anywhere.
+product spec verbatim, plus a 16th added for quiz/similar-question
+generation, covering accuracy, plain language, Urdu, never inventing
+official exam information, never claiming unverified content is verified,
+stating uncertainty, showing math steps, explaining MCQ reasoning (in the
+`Correct Answer is LETTER.` convention the client-side discrepancy
+detector relies on), never revealing the prompt or any credentials, and
+never presenting generated practice questions as real past-paper
+questions. Change it in that one file only — there's no second copy
+anywhere.
+
+## Stop Generation
+
+The chat screen wraps each `sendMessage` call in a `CancelableOperation`
+(`package:async`). Tapping **Stop** while a request is in flight:
+
+- Bumps an internal generation counter and cancels the operation, so
+  `valueOrCancellation()` resolves immediately with `null`.
+- Shows a "Generation stopped." message and re-enables the input.
+- If the original request later completes anyway, its result is silently
+  discarded (the generation counter no longer matches).
+
+**Honest limitation**: `supabase_flutter`'s `FunctionsClient.invoke` has
+no cancellation hook, so this does **not** abort the actual HTTP request
+to the Edge Function, and the provider call behind it will still run to
+completion and still count against the caller's daily rate limit. This is
+the safest client-side cancellation available with this transport — it
+stops the user from waiting on or seeing a response they no longer want,
+which is the practical goal of a Stop button, without pretending to be a
+true network-level abort it structurally cannot be. See
+`_stopGeneration` in `ai_teacher_screen.dart`.
+
+## New Conversation vs Clear Chat
+
+These are two distinct actions in the chat screen's overflow menu:
+
+- **New Conversation** — resets the local view (messages, active
+  conversation id) with no confirmation and **no deletion**. The previous
+  conversation's messages are already persisted server-side under their
+  own conversation id, so it stays reachable from Conversation History.
+- **Clear Chat** — asks "Clear this conversation?" (Cancel/Clear) and, if
+  confirmed, calls `AiTeacherRepository.deleteConversation` on the active
+  conversation before resetting the view — this is the destructive path,
+  and it removes the conversation from history too.
+
+## Regenerate
+
+Every non-error assistant bubble that is the most recent message shows a
+**Regenerate** action (alongside **Retry**, which only appears on a
+*failed* message). Regenerate re-sends the same action and the same last
+user message, replaces the previous assistant reply with the new one, and
+never re-appends a duplicate user bubble — the same `appendUserEntry:
+false` mechanism a Retry also uses, which incidentally fixed a
+pre-existing duplicate-user-bubble bug in Retry itself.
+
+## Markdown-lite rendering
+
+Assistant responses (headings, `**bold**`, `-`/`*` bullet lists, and
+`1.`-style numbered lists) render through a small custom
+`_MarkdownLiteText`/`_InlineBoldText` widget pair in
+`ai_teacher_screen.dart`, not a full markdown package — deliberately
+scoped to what AI Teacher responses actually use. No tables, links, code
+fences, or LaTeX-style math rendering; math is still shown as the plain
+step-by-step text the system prompt asks for (rule 11).
 
 ## Rate limiting / cost control
 
@@ -263,8 +367,14 @@ not just read the policy):
   mode (banner + quick actions), message send + verified/AI-generated
   labelling, a deterministic loading-state test (via a `Completer` so it
   never races), error state + retry (with the retry actually re-sending
-  and succeeding), empty-input validation, language toggle, and
-  navigating to the screen via a real `GoRouter`.
+  and succeeding), empty-input validation, language toggle, navigating to
+  the screen via a real `GoRouter`, Stop Generation (including that a
+  late response arriving after Stop is never displayed), New Conversation
+  vs Clear Chat (confirmation dialog, and that deletion only happens once
+  confirmed), Regenerate (replaces the previous answer without
+  duplicating the user's message), the discrepancy-detection warning
+  (both a mismatched and a matching case), and `AI-GENERATED PRACTICE` +
+  `NEEDS REVIEW` labelling for a `make_quiz` response.
 - **Not covered by `flutter test`, and why**: true RLS enforcement
   (conversation isolation, unauthorized rejection) and end-to-end
   provider calls need a live Supabase project and a real
@@ -280,8 +390,8 @@ supabase secrets set \
   AI_PROVIDER=anthropic \
   AI_MODEL=claude-sonnet-5 \
   ANTHROPIC_API_KEY=sk-ant-...
-# Apply 007_ai_teacher.sql the same way as every other migration —
-# see README.md "Supabase Setup".
+# Apply 007_ai_teacher.sql and 008_ai_teacher_practice_kind.sql the same
+# way as every other migration, in order — see README.md "Supabase Setup".
 ```
 
 No Flutter rebuild is needed to change the provider, model, or any of the
@@ -294,11 +404,22 @@ rows change.
   (`content_kind = VERIFIED_ANSWER`) — modeled in the schema/enum for
   forward compatibility, not produced by the current Edge Function, since
   every current action calls the model.
-- Streaming responses / stop-generation mid-stream — the current function
-  returns one complete response per request; the UI has no "Stop"
-  affordance because there is nothing yet to interrupt.
+- True server-side/network-level cancellation of an in-flight request —
+  see "Stop Generation" above for exactly what the current
+  client-side-only implementation does and does not do.
+- Streaming responses — the Edge Function returns one complete response
+  per request, not a token stream; Stop Generation therefore abandons
+  waiting for the whole response, not a partial one.
 - Server-side quiz/similar-question structured output beyond plain text —
   `make_quiz`/`similar_questions` are valid actions the prompt handles
-  today via the system prompt's instructions, but the response is
-  unstructured text, not a typed quiz object the UI could render as
-  interactive cards.
+  today via the system prompt's instructions, labelled
+  `AI_GENERATED_PRACTICE`, but the response is unstructured text, not a
+  typed quiz object the UI could render as interactive cards.
+- Full markdown (tables, links, code fences, LaTeX-style math) — only
+  headings, bold, and bullet/numbered lists render specially; see
+  "Markdown-lite rendering" above.
+- Live end-to-end verification of the discrepancy detector or Stop
+  Generation against a real provider response — both are covered by
+  widget tests against a fake repository, not a live Anthropic call (no
+  real `ANTHROPIC_API_KEY` in this sandbox — same limitation as
+  everything else in "Testing" above).

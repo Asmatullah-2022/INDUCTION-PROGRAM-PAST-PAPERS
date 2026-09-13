@@ -17,6 +17,12 @@ enum AiContentKind {
   /// educational help, not tied to any specific verified question.
   aiGeneratedAnswer,
 
+  /// AI-generated practice material (a quiz, or questions "similar to"
+  /// a verified one) — never a real past-paper question, and kept
+  /// distinct from [aiGeneratedAnswer]/[aiGeneratedExplanationBasedOnVerified]
+  /// so generated practice can never be mistaken for a real answer.
+  aiGeneratedPractice,
+
   /// General educational chat with no question context at all.
   general,
 }
@@ -30,6 +36,8 @@ extension AiContentKindX on AiContentKind {
         return AiContentKind.aiGeneratedExplanationBasedOnVerified;
       case 'AI_GENERATED_ANSWER':
         return AiContentKind.aiGeneratedAnswer;
+      case 'AI_GENERATED_PRACTICE':
+        return AiContentKind.aiGeneratedPractice;
       default:
         return AiContentKind.general;
     }
@@ -46,12 +54,20 @@ extension AiContentKindX on AiContentKind {
         return 'AI-GENERATED EXPLANATION BASED ON VERIFIED CONTENT';
       case AiContentKind.aiGeneratedAnswer:
         return 'AI-GENERATED ANSWER';
+      case AiContentKind.aiGeneratedPractice:
+        return 'AI-GENERATED PRACTICE';
       case AiContentKind.general:
         return 'AI-GENERATED';
     }
   }
 
   bool get isBasedOnVerifiedContent => this == AiContentKind.aiGeneratedExplanationBasedOnVerified;
+
+  /// True for AI content that was never grounded in verified app data (a
+  /// free-standing AI answer, or generated practice material) — surfaced
+  /// in the UI as a secondary "NEEDS REVIEW" caption per the product spec,
+  /// distinct from the primary content_kind label above it.
+  bool get needsReviewBadge => this == AiContentKind.aiGeneratedAnswer || this == AiContentKind.aiGeneratedPractice;
 }
 
 enum AiMessageRole { user, assistant }
