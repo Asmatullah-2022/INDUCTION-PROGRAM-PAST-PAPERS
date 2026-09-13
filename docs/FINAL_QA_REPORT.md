@@ -1,6 +1,45 @@
 # Final QA Report
 
-## Latest pass: Privacy Policy deployment attempt — stopped at a human boundary
+## Latest pass: Privacy Policy deployment — VERIFIED via GitHub API
+
+The repository owner enabled GitHub Pages (Settings → Pages → Deploy
+from a branch → `claude/induction-program-app-c3mfag` → `/ (root)`)
+since the previous pass below. This session verified the result rather
+than assuming it:
+
+- **Deployment build confirmed successful** via GitHub's Actions API
+  (`api.github.com`, reachable from this sandbox): the "pages build and
+  deployment" workflow run `34758035632` shows `status: completed`,
+  `conclusion: success`, for commit
+  `fb75dfff5eb797512fdb3df6d24a1d312efa465e` on this branch, triggered
+  by the repo owner at `2026-09-13T12:47:05Z`.
+- **Live HTTP content fetch is NOT possible from this sandbox**: both
+  `WebFetch` and `curl -I` against
+  `https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html`
+  were rejected (`EGRESS_BLOCKED` / `403 CONNECT`) by this sandbox's own
+  egress proxy, confirmed via `/__agentproxy/status` to be a standing
+  organization policy denial for `*.github.io`, not a transient error.
+  **DEPLOYMENT EXISTS BUT EXTERNAL VERIFICATION IS UNAVAILABLE** for
+  that specific HTTP-response check from this environment.
+- The real, build-confirmed URL —
+  `https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html`
+  — has replaced the `PRIVACY_POLICY_URL_REQUIRED` placeholder in
+  `docs/PLAY_STORE_RELEASE_CHECKLIST.md` and this file, each annotated
+  that a human should still open it once to confirm rendering before
+  relying on it for Play Store submission.
+- Checked the Flutter app's own Privacy Policy entry points (About,
+  Settings, Sign Up screens) — none reference the external URL; all
+  correctly navigate to the in-app `/privacy` route by design, so no
+  code change was needed here.
+- `flutter analyze` and `flutter test` were re-run this pass (see
+  "Run results" below) — no application code changed, so results are
+  unchanged from the prior pass.
+
+Full evidence trail: `docs/PRIVACY_POLICY_DEPLOYMENT.md`.
+
+---
+
+## Prior pass: Privacy Policy deployment attempt — stopped at a human boundary
 
 This session inspected the repository via the GitHub API and confirmed
 two hard blockers to actually deploying `privacy-policy.html`, neither

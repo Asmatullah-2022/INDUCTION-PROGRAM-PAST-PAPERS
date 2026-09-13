@@ -1,39 +1,85 @@
 # Privacy Policy Deployment
 
-**Status: page created, NOT DEPLOYED.** This document describes exactly
-what exists in the repository and exactly what a human with hosting/
-Play Console access must do next — it does not claim any URL is live,
-because none has actually been published anywhere from this sandbox.
+**Status: DEPLOYMENT CONFIRMED (via GitHub API), HTTPS ACCESSIBILITY NOT
+INDEPENDENTLY VERIFIED FROM THIS SANDBOX.** GitHub Pages has been enabled
+by the repository owner and GitHub's own "pages build and deployment"
+workflow reports a successful build (evidence below). This sandbox's
+network egress cannot reach `*.github.io` to independently confirm the
+live HTTP response/content, so that specific check — and only that
+check — still requires a human (or a future session with unblocked
+egress) to open the URL directly.
 
-## This session's findings — why deployment stops here, at a human boundary
+## Verification performed this session (2026-09-13)
 
-Inspected directly via the GitHub API this session:
+**1. Deployment build confirmed successful — via GitHub's Actions API**
+(`api.github.com`, not blocked by this sandbox's egress policy):
 
-- **Repository**: `Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS`.
-- **Branches**: exactly one — `claude/induction-program-app-c3mfag`.
-  There is no `main`/`master` branch. This branch *is* the repository's
-  only branch, so Option A below needs no "merge to default branch"
-  step — it already is the only branch there is.
-- **GitHub Pages**: this session has no tool that can read or change a
-  repository's Pages configuration (enabling Pages is a repository
-  **Settings** action — `Settings → Pages` — that requires a human with
-  admin access to the repo; no API call for it is exposed to this
-  session). There is no evidence Pages is currently enabled, and this
-  session cannot enable it.
-- **Network egress**: this sandbox's outbound network is restricted by
-  an allowlisted proxy. A direct attempt this session to fetch
-  `https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html`
-  (to check whether Pages happened to already be live) was rejected by
-  the proxy with `EGRESS_BLOCKED` before even reaching GitHub's
-  servers. This means **even after a human enables Pages, this sandbox
-  cannot verify the resulting URL itself** — verification (§"How to
-  verify" below) must be done by the human doing the deployment, from
-  their own browser/machine, not from this session.
+```
+mcp__github__actions_list(method: list_workflow_runs,
+  owner: Asmatullah-2022, repo: INDUCTION-PROGRAM-PAST-PAPERS,
+  branch: claude/induction-program-app-c3mfag)
+```
 
-Both of these are hard boundaries of this environment, not something a
-different prompt or another attempt would get past. This is the exact
-point at which the task stops, per the explicit instruction not to
-fabricate a deployment or a URL.
+Result — one run, of workflow **"pages build and deployment"**:
+
+| Field | Value |
+|---|---|
+| Run ID | `34758035632` |
+| Status / Conclusion | `completed` / **`success`** |
+| Branch | `claude/induction-program-app-c3mfag` |
+| Commit | `fb75dfff5eb797512fdb3df6d24a1d312efa465e` |
+| Triggered by | `Asmatullah-2022` (repo owner) |
+| Started / Updated | `2026-09-13T12:47:05Z` / `2026-09-13T12:47:33Z` |
+| Run URL | https://github.com/Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS/actions/runs/34758035632 |
+
+This is real, independently-checkable evidence — not the user's
+unverified claim — that GitHub accepted the Pages configuration and
+built/published the site successfully for the exact commit that added
+`privacy-policy.html`.
+
+**2. HTTPS-level content check — attempted twice, both blocked by this
+sandbox's own egress policy (not a GitHub-side failure):**
+
+- `WebFetch` on `https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html`
+  → `EGRESS_BLOCKED` ("Access to asmatullah-2022.github.io is blocked by
+  the network egress proxy").
+- `curl -I` on the same URL → exit 56, `CONNECT tunnel failed, response
+  403`, `HTTP_STATUS:000`.
+- Confirmed via the proxy's own status endpoint
+  (`http://127.0.0.1:44055/__agentproxy/status`): `*.github.io` is not
+  in the `noProxy` allowlist, and `recentRelayFailures` shows a live
+  entry — `{"host": "asmatullah-2022.github.io:443", "kind":
+  "connect_rejected", "detail": "gateway answered 403 to CONNECT
+  (policy denial or upstream failure)"}`.
+
+This is a standing, deliberate organization network policy in this
+sandbox, not a transient error — retrying will not change the result.
+**DEPLOYMENT EXISTS BUT EXTERNAL VERIFICATION IS UNAVAILABLE** (from
+this sandbox) for the live-HTTP-response/content check specifically.
+
+## The confirmed URL
+
+Given (1) above, this is now reported as a **real, build-confirmed**
+deployment URL — not merely the deterministic formula predicted before
+Pages was enabled:
+
+```
+https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html
+```
+
+**Before entering this in Play Console, a human should still open it in
+a real browser once** to confirm the page renders (content/mobile
+layout), since this sandbox could only confirm the *build* succeeded,
+not the *served content*. This is a materially lighter check than
+verifying a deployment happened at all — that part is now done.
+
+## Prior session's findings (superseded by the above)
+
+Earlier in this project, GitHub Pages had not yet been enabled, and this
+document accordingly reported that deployment could not proceed past a
+human-only boundary (enabling Pages requires repo Settings access this
+session never had). The repository owner has since enabled Pages
+themselves; the section above reflects the current, confirmed state.
 
 ## What exists right now
 
@@ -52,42 +98,33 @@ alone does not satisfy this, because reviewers and users must be able
 to open the policy from a web browser, before ever installing the app.
 `privacy-policy.html` exists specifically to be that URL's content.
 
-## Exact deployment steps (pick one — none of these has been run)
+## Deployment steps — Option A already completed by the repo owner
 
-### Option A — GitHub Pages (recommended: zero new service, repo is already on GitHub)
+### Option A — GitHub Pages (DONE — confirmed via GitHub Actions API above)
 
-For this exact repository (`Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS`),
-which currently has only one branch:
+The repo owner enabled **Settings → Pages → Deploy from a branch →
+`claude/induction-program-app-c3mfag` → `/ (root)`** themselves, and the
+resulting "pages build and deployment" workflow run (`34758035632`)
+completed with conclusion `success` for commit `fb75dfff5eb7...`. The
+live URL is:
 
-1. Go to **github.com/Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS →
-   Settings → Pages**. (Requires being signed in as the repo owner or
-   an admin collaborator — this is the human-only step this session
-   cannot perform.)
-2. Under **Build and deployment → Source**, choose **"Deploy from a
-   branch"**.
-3. Under **Branch**, choose **`claude/induction-program-app-c3mfag`**
-   (this repository's only branch today) and **Folder: `/ (root)`**,
-   then **Save**.
-   - If, by the time you do this, the work has been merged into a
-     `main` branch instead, choose `main` there rather than this
-     branch — use whichever branch is actually the repository's default
-     at deployment time.
-4. Wait for the "pages build and deployment" GitHub Action to finish —
-   Settings → Pages will show a green "Your site is live at ..." banner
-   once done (usually under a minute).
-5. **The resulting URL will be exactly:**
-   ```
-   https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html
-   ```
-   This is a deterministic consequence of GitHub Pages' own URL scheme
-   for this specific, already-known repository owner/name — it is
-   **not yet live**, and this session could not verify it even after
-   you enable Pages (see "This session's findings" above: outbound
-   access to `*.github.io` is blocked from this sandbox). **You must
-   verify it yourself** — open it in a real browser, or run the `curl`
-   command in "How to verify" below from your own machine — before
-   treating it as real and before entering it anywhere in Play Console
-   or replacing any `PRIVACY_POLICY_URL_REQUIRED` placeholder with it.
+```
+https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html
+```
+
+Remaining step: a human should open this URL once in a real browser to
+eyeball rendering/mobile layout — this sandbox confirmed the build
+succeeded server-side but could not fetch the page's actual HTTP
+response (egress to `*.github.io` is blocked here; see above).
+
+**Known tradeoff of this option, stated plainly**: choosing "root" as
+the Pages folder publishes the *entire* repository's tracked files as
+static, browsable content (e.g. `README.md`, the `docs/` folder) at
+their own paths, not just `privacy-policy.html`. Nothing in this
+repository is secret — every prior security audit in this project
+(`docs/SECURITY_AUDIT.md`) confirmed no credential is ever committed —
+so this is not a security exposure, but it is a discoverability
+tradeoff worth knowing.
 
 **Known tradeoff of this option, stated plainly**: choosing "root" as
 the Pages folder publishes the *entire* repository's tracked files as
@@ -117,10 +154,10 @@ If there's already a website for this project/organization, upload
 `https://your-existing-site.example/privacy-policy`) and use that URL
 instead.
 
-## How to verify the deployed page (once one of the above is done)
+## How to verify the deployed page (remaining human step)
 
 ```bash
-curl -I https://<the-real-deployed-url>
+curl -I https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html
 ```
 Expect `HTTP/2 200` (or `HTTP/1.1 200 OK`) and `content-type: text/html`.
 Then open the URL in an actual mobile browser (or Chrome DevTools'
@@ -128,7 +165,8 @@ device emulation) and confirm it renders without horizontal scrolling
 and is readable at phone width — the page's CSS was written to be
 mobile-friendly by default (a single centered column, system fonts, a
 `viewport` meta tag), but this should still be eyeballed once, on the
-real deployed URL, not just assumed from reading the HTML source.
+real deployed URL, not just assumed from reading the HTML source or
+from GitHub's build-success signal alone.
 
 ## Where to enter the URL in Google Play Console
 
@@ -155,30 +193,29 @@ itself) — the "Account Deletion" section already inside
 page is required unless Play's own form for this specific app
 explicitly asks for one.
 
-## What remains blocked until deployment
+## What remains — updated after this session's verification pass
 
-- **Enabling GitHub Pages itself** — requires a human with admin access
-  to the repository's Settings; no tool available to this session can
-  do this. This is the actual, current blocker — everything else in
-  this document is ready and waiting on this one manual step.
-- **Verifying the resulting URL** — even after Pages is enabled, this
-  sandbox's network egress cannot reach `*.github.io` (confirmed this
-  session — see "This session's findings" above), so verification must
-  happen from the deploying human's own browser/machine, not from a
-  future session running in this same sandbox either.
-- **Play Store submission itself** — cannot be finalized without a
-  real, live, human-verified Privacy Policy URL entered in Console.
-  Every other Play Store checklist item in `docs/
-  PLAY_STORE_RELEASE_CHECKLIST.md` can proceed independently of this
-  one, but the listing as a whole cannot be submitted without it.
-- **`docs/PLAY_STORE_RELEASE_CHECKLIST.md` and `docs/PLAY_STORE_LISTING.md`**
-  both reference the literal placeholder `PRIVACY_POLICY_URL_REQUIRED`
-  wherever the real URL belongs — replace every occurrence of that
-  exact string with the real, human-verified deployed URL once the
-  steps above have actually been carried out, and only then. Do not
-  replace it based on the deterministic URL formula in Option A step 5
-  alone — that formula is correct but unverified until a human opens it.
-- **A live-browser mobile-friendliness check** — the CSS was written to
-  be mobile-friendly and reviewed by reading it, but was not opened in
-  an actual browser from this sandbox; do this once deployed, per "How
-  to verify" above, from the deploying human's own device.
+- **Enabling GitHub Pages** — DONE (repo owner), confirmed via the
+  GitHub Actions API evidence above. No longer a blocker.
+- **Deployment build succeeding** — DONE, confirmed via GitHub's own
+  "pages build and deployment" workflow (`run 34758035632`,
+  conclusion `success`) — not this sandbox's assumption, GitHub's own
+  record.
+- **Independently fetching the live HTTP response/content from this
+  sandbox** — still blocked: this sandbox's network egress cannot reach
+  `*.github.io` (reconfirmed this session via `WebFetch`, `curl`, and
+  the proxy's `/__agentproxy/status` `recentRelayFailures` entry). A
+  human (or a future session with unblocked egress) should open the URL
+  above once in a real browser to eyeball rendering/mobile layout before
+  final Play Store submission — this is a lighter remaining check than
+  "is it deployed at all," which is now answered yes.
+- **`PRIVACY_POLICY_URL_REQUIRED` placeholders** — replaced in
+  `docs/PLAY_STORE_RELEASE_CHECKLIST.md` and `docs/FINAL_QA_REPORT.md`
+  with the real, build-confirmed URL above, each annotated with the
+  same "build-confirmed, human should eyeball once" caveat.
+  `docs/PLAY_STORE_LISTING.md` was checked this session and contains no
+  `PRIVACY_POLICY_URL_REQUIRED` occurrence, so it needed no edit.
+- **Play Store submission itself** — every other Play Store checklist
+  item in `docs/PLAY_STORE_RELEASE_CHECKLIST.md` can proceed
+  independently; this specific blocker is now resolved pending the
+  one-time human eyeball check above.
