@@ -3,7 +3,13 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/admin/admin_dashboard_screen.dart';
+import '../../features/admin/admin_paper_detail_screen.dart';
+import '../../features/admin/admin_paper_form_screen.dart';
+import '../../features/admin/admin_papers_screen.dart';
+import '../../features/admin/admin_question_form_screen.dart';
+import '../../features/admin/admin_questions_screen.dart';
 import '../../features/admin/admin_review_screen.dart';
+import '../../features/admin/admin_sections_screen.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
@@ -140,6 +146,42 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/about', builder: (context, state) => const AboutScreen()),
       GoRoute(path: '/admin', builder: (context, state) => const AdminDashboardScreen()),
       GoRoute(path: '/admin/review', builder: (context, state) => const AdminReviewScreen()),
+      GoRoute(
+        path: '/admin/review/sections/:sectionId/questions/:questionId',
+        builder: (context, state) => AdminQuestionFormScreen(
+          sectionId: state.pathParameters['sectionId']!,
+          questionId: state.pathParameters['questionId'],
+        ),
+      ),
+      GoRoute(path: '/admin/papers', builder: (context, state) => const AdminPapersScreen()),
+      GoRoute(path: '/admin/papers/new', builder: (context, state) => const AdminPaperFormScreen()),
+      GoRoute(
+        path: '/admin/papers/:paperId',
+        builder: (context, state) =>
+            AdminPaperDetailScreen(paperId: state.pathParameters['paperId']!),
+      ),
+      GoRoute(
+        path: '/admin/papers/:paperId/sections',
+        builder: (context, state) =>
+            AdminSectionsScreen(paperId: state.pathParameters['paperId']!),
+      ),
+      GoRoute(
+        path: '/admin/papers/:paperId/sections/:sectionId/questions',
+        builder: (context, state) => AdminQuestionsScreen(
+          paperId: state.pathParameters['paperId']!,
+          sectionId: state.pathParameters['sectionId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/admin/papers/:paperId/sections/:sectionId/questions/:questionId',
+        builder: (context, state) {
+          final questionId = state.pathParameters['questionId'];
+          return AdminQuestionFormScreen(
+            sectionId: state.pathParameters['sectionId']!,
+            questionId: questionId == 'new' ? null : questionId,
+          );
+        },
+      ),
     ],
   );
 });

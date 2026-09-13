@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/repositories/admin_repository.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/bookmark_repository.dart';
 import '../../data/repositories/paper_repository.dart';
@@ -12,6 +13,7 @@ import '../../data/repositories/subject_repository.dart';
 import '../services/connectivity_service.dart';
 
 final authRepositoryProvider = Provider((ref) => AuthRepository());
+final adminRepositoryProvider = Provider((ref) => AdminRepository());
 final profileRepositoryProvider = Provider((ref) => ProfileRepository());
 final phaseRepositoryProvider = Provider((ref) => PhaseRepository());
 final subjectRepositoryProvider = Provider((ref) => SubjectRepository());

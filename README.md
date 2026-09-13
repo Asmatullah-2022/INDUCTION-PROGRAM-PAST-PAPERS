@@ -111,10 +111,26 @@ source papers are supplied and go through this pipeline.
 
 Admin access is controlled by `profiles.is_admin` (see Supabase Setup
 above) and enforced server-side by RLS — see `CLAUDE.md` "Security Rules".
-The in-app `/admin` route currently ships a content QA dashboard
-(published-paper counts per phase, question-type/quality-status counts)
-and a role gate; full content CRUD admin screens are a planned follow-up
-(see `CLAUDE.md` "Admin System").
+The in-app `/admin` route ships:
+
+- a content QA dashboard (published-paper counts per phase,
+  question-type/quality-status counts, missing-slot banner);
+- **Manage Papers** (`/admin/papers`): create a paper for a phase/subject
+  slot, upload/replace its original PDF/image to Storage, and change its
+  `content_status` (publishing requires an explicit confirmation);
+- section management (`/admin/papers/:id/sections`): add/delete Section
+  A/B/C-style sections with marks and instructions;
+- question management (`.../sections/:id/questions`): add/edit/delete
+  MCQ/short/long questions, including the MCQ options editor (add/remove
+  options, pick the verified-correct one, and optionally record the
+  original marked option — a mismatch automatically flags
+  `PAPER_ANSWER_ERROR`), and the quality-status/quality-note fields;
+- **Review Questionable Questions** (`/admin/review`): every question
+  anywhere whose `quality_status` isn't `VERIFIED`, opening straight into
+  the question editor above.
+
+All of this is a UX convenience only — see `CLAUDE.md` "Security Rules" for
+why the actual enforcement is server-side RLS, not this UI.
 
 ## Testing
 

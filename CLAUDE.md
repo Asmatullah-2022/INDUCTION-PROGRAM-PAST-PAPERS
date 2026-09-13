@@ -25,6 +25,14 @@ papers, MCQ practice, bookmarks, and progress tracking.
 - Offline reads go through `CacheService` (SharedPreferences-backed JSON
   cache). Every repository read method should attempt network first, then
   fall back to cache on failure — see `PhaseRepository` for the pattern.
+- Admin writes (`lib/data/repositories/admin_repository.dart`,
+  `lib/features/admin/`) are kept separate from the read-only repositories
+  normal users go through — admin screens never read/write via
+  `PaperRepository` etc. Pure validation used by an admin write path
+  belongs in `lib/core/validation/` (see `QuestionValidation`), not inline
+  in the repository method, so it stays unit-testable without mocking
+  Supabase — extend that pattern for new admin content rules rather than
+  adding another inline check.
 
 ## Database Rules (see supabase/migrations/)
 

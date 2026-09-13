@@ -96,11 +96,25 @@ class AdminDashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 24),
-                ListTile(
-                  leading: const Icon(Icons.rule_folder_outlined),
-                  title: const Text('Review Questionable Questions'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/admin/review'),
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.description_outlined),
+                        title: const Text('Manage Papers'),
+                        subtitle: const Text('Create papers, upload originals, edit sections/questions'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/admin/papers'),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.rule_folder_outlined),
+                        title: const Text('Review Questionable Questions'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push('/admin/review'),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );

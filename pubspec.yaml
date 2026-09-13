@@ -34,6 +34,9 @@ dependencies:
   flutter_svg: ^2.0.17
   cached_network_image: ^3.4.1
 
+  # Admin: original paper file upload
+  file_picker: ^8.1.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
