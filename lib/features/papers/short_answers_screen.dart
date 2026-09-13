@@ -56,7 +56,8 @@ class ShortAnswersScreen extends ConsumerWidget {
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: shorts.length,
-            itemBuilder: (context, index) => QuestionTile(question: shorts[index]),
+            itemBuilder: (context, index) =>
+                QuestionTile(question: shorts[index], paperId: paperId),
           );
         },
         loading: () => const LoadingList(),

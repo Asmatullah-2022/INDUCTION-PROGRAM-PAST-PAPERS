@@ -111,7 +111,7 @@ class _CompleteSolutionScreenState extends ConsumerState<CompleteSolutionScreen>
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
-                  ...entry.questions.map((q) => QuestionTile(question: q)),
+                  ...entry.questions.map((q) => QuestionTile(question: q, paperId: widget.paperId)),
                 ],
               );
             },

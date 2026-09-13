@@ -108,6 +108,39 @@ the rules those guides must keep following, not the how-to.
   SOURCE PAPER — DO NOT PUBLISH", already implemented in the subject and
   original-paper-viewer screens.
 
+## AI Teacher Rules
+
+- AI Teacher is an educational tutor, **never** an official examination
+  authority. Its output must never be presented as an official verified
+  answer unless it actually is one.
+- The Flutter app is provider-agnostic by construction: it only calls
+  `SupabaseService.client.functions.invoke('ai-teacher', ...)`. Never add
+  a direct import of an LLM provider SDK/type under `lib/`, and never
+  hardcode a provider name/model into Flutter code — provider/model
+  selection lives entirely in the `ai-teacher` Edge Function's env vars
+  (`AI_PROVIDER`, `AI_MODEL`). Adding a new provider means adding a new
+  `callProvider` case in `supabase/functions/ai-teacher/index.ts`, not
+  touching Flutter.
+- `ai_messages.content_kind` is the single source of truth for
+  verified-vs-AI-generated labeling (`VERIFIED_ANSWER` /
+  `AI_GENERATED_EXPLANATION_BASED_ON_VERIFIED` / `AI_GENERATED_ANSWER` /
+  `GENERAL`, DB CHECK-constrained). Never introduce a second,
+  independent way to decide whether something is "verified" in the AI
+  Teacher UI — always derive the label from this column via
+  `AiContentKindX.label`.
+- The Edge Function must fetch verified question/answer context through
+  a JWT-scoped Supabase client (respecting RLS), never the service-role
+  client — this is what structurally guarantees the AI is never handed
+  DRAFT/UNDER_REVIEW content for a non-admin user.
+- `ai_usage_daily` must keep having no authenticated insert/update RLS
+  policy — only the Edge Function's service-role client may write it.
+  Don't add a policy that would let a client inflate its own quota.
+- Don't fabricate exam content through the AI path either: the system
+  prompt (`SYSTEM_PROMPT` in `index.ts`) forbids the AI from claiming
+  generated questions/answers are real Induction Program past-paper
+  content, and that instruction must stay intact if the prompt is
+  edited.
+
 ## Security Rules
 
 - The Flutter app must only ever hold `SUPABASE_ANON_KEY` (passed via

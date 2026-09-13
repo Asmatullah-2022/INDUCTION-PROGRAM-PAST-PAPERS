@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/admin/admin_dashboard_screen.dart';
+import '../../features/ai_teacher/ai_teacher_context.dart';
+import '../../features/ai_teacher/ai_teacher_history_screen.dart';
+import '../../features/ai_teacher/ai_teacher_screen.dart';
 import '../../features/admin/admin_audit_log_screen.dart';
 import '../../features/admin/admin_content_coverage_screen.dart';
 import '../../features/admin/admin_import_screen.dart';
@@ -148,6 +151,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/privacy', builder: (context, state) => const PrivacyScreen()),
       GoRoute(path: '/about', builder: (context, state) => const AboutScreen()),
+      GoRoute(
+        path: '/ai-teacher',
+        builder: (context, state) =>
+            AiTeacherScreen(context0: state.extra as AiTeacherContext?),
+      ),
+      GoRoute(
+        path: '/ai-teacher/history',
+        builder: (context, state) => const AiTeacherHistoryScreen(),
+      ),
       GoRoute(path: '/admin', builder: (context, state) => const AdminDashboardScreen()),
       GoRoute(path: '/admin/review', builder: (context, state) => const AdminReviewScreen()),
       GoRoute(

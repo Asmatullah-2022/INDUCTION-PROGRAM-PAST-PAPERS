@@ -56,7 +56,8 @@ class AnswerKeyScreen extends ConsumerWidget {
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: mcqs.length,
-            itemBuilder: (context, index) => QuestionTile(question: mcqs[index]),
+            itemBuilder: (context, index) =>
+                QuestionTile(question: mcqs[index], paperId: paperId),
           );
         },
         loading: () => const LoadingList(),

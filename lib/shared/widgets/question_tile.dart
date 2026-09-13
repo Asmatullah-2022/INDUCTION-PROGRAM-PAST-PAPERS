@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/providers/repository_providers.dart';
 import '../../data/models/bookmark.dart';
 import '../../data/models/question.dart';
+import '../../features/ai_teacher/ai_teacher_context.dart';
 import 'quality_badge.dart';
 
 /// Renders one question (MCQ/short/long) with its verified answer,
@@ -13,7 +15,17 @@ class QuestionTile extends ConsumerWidget {
   final Question question;
   final bool showBookmark;
 
-  const QuestionTile({super.key, required this.question, this.showBookmark = true});
+  /// When supplied, an "Ask AI Teacher about this question" button is
+  /// shown, opening the chat pre-loaded with this question's verified
+  /// content as context (see AiTeacherContext).
+  final String? paperId;
+
+  const QuestionTile({
+    super.key,
+    required this.question,
+    this.showBookmark = true,
+    this.paperId,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -112,6 +124,25 @@ class QuestionTile extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(question.explanation!),
                   ],
+                ),
+              ),
+            ],
+            if (paperId != null) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push(
+                    '/ai-teacher',
+                    extra: AiTeacherContext(
+                      paperId: paperId,
+                      questionId: question.id,
+                      questionPreview: question.questionText,
+                      isMcq: question.questionType.name == 'mcq',
+                    ),
+                  ),
+                  icon: const Icon(Icons.smart_toy_outlined, size: 18),
+                  label: const Text('Ask AI Teacher'),
                 ),
               ),
             ],

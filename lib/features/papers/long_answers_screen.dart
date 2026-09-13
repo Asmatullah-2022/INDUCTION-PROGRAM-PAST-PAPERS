@@ -56,7 +56,8 @@ class LongAnswersScreen extends ConsumerWidget {
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: longs.length,
-            itemBuilder: (context, index) => QuestionTile(question: longs[index]),
+            itemBuilder: (context, index) =>
+                QuestionTile(question: longs[index], paperId: paperId),
           );
         },
         loading: () => const LoadingList(),

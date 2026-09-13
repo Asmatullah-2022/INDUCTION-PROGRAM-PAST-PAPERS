@@ -121,6 +121,7 @@ class HomeScreen extends ConsumerWidget {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.quiz_outlined), label: 'Practice'),
+          NavigationDestination(icon: Icon(Icons.smart_toy_outlined), label: 'AI Teacher'),
           NavigationDestination(icon: Icon(Icons.bookmark_outline), label: 'Bookmarks'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
         ],
@@ -130,9 +131,12 @@ class HomeScreen extends ConsumerWidget {
               context.push('/practice/setup');
               break;
             case 2:
-              context.push('/bookmarks');
+              context.push('/ai-teacher');
               break;
             case 3:
+              context.push('/bookmarks');
+              break;
+            case 4:
               context.push('/settings');
               break;
           }

@@ -3,8 +3,10 @@
 An Android app helping newly recruited government teachers in Khyber
 Pakhtunkhwa, Pakistan prepare for the Teacher Induction Program
 examinations — original past papers, verified answer keys, solved
-short/long questions, complete solved papers, MCQ practice, bookmarks, and
-progress tracking.
+short/long questions, complete solved papers, MCQ practice, bookmarks,
+progress tracking, and an AI Teacher chat tutor (see
+`docs/AI_TEACHER_GUIDE.md`) that explains verified content without ever
+overriding it.
 
 This app is an independent educational preparation resource and is not an
 official government application unless explicitly stated otherwise.
@@ -19,13 +21,14 @@ lib/
     repositories/  the only layer that talks to Supabase directly
   features/        one folder per feature (auth, home, phases, subjects,
                     papers, practice, bookmarks, progress, profile,
-                    settings, search, admin)
+                    settings, search, admin, ai_teacher)
   shared/widgets/  cross-feature UI (quality badges, empty/error states, ...)
 
 supabase/
   migrations/      001_initial_schema, 002_rls, 003_storage,
-                    004_seed_structure, 005_indexes
+                    004_seed_structure, 005_indexes, 007_ai_teacher
   functions/       delete-account (Edge Function; service-role only)
+                   ai-teacher (Edge Function; provider-agnostic AI proxy)
 
 scripts/
   validate_content.dart   validates paper JSON before import
@@ -57,10 +60,16 @@ flutter pub get
    supabase db push
    # or run supabase/migrations/*.sql in order through the SQL editor
    ```
-3. Deploy the Edge Function used for account deletion:
+3. Deploy the Edge Functions:
    ```bash
    supabase functions deploy delete-account
+   supabase functions deploy ai-teacher
+   supabase secrets set AI_PROVIDER=anthropic AI_MODEL=claude-sonnet-5 \
+     ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_ANON_KEY=... \
+     SUPABASE_SERVICE_ROLE_KEY=...
    ```
+   See `docs/AI_TEACHER_GUIDE.md` for what `ai-teacher` does and why its
+   secrets are never referenced from the Flutter app.
 4. In Authentication → URL Configuration, add a redirect URL matching the
    Android deep link declared in `AndroidManifest.xml`:
    `com.asmatullahkhan.inductionprogrampastpapers://reset-password`
