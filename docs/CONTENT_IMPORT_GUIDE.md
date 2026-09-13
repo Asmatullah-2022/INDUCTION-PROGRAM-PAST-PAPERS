@@ -13,6 +13,49 @@ import).
 this pipeline. Nothing here should ever be used to invent or approximate
 content — see CLAUDE.md "Content Rules" and "Do-Not-Do List".
 
+## From a scanned/PDF source paper (before you have JSON)
+
+This guide's "Step 1" below assumes you already have structured JSON.
+Getting there from a raw scanned paper is currently a **manual**
+process — there is no OCR/parsing script in this repository yet, and
+this guide will not claim one exists. The recommended source-file
+convention and honest pipeline status:
+
+```
+content/source/phase_ii/<subject>/   (or phase_iii, phase_iv)
+  page-01.jpg / page-01.png / paper.pdf   — the untouched scanned source
+```
+
+Supported source formats: PDF, JPG, PNG (scanned pages). Keep the raw
+source file here even after transcribing it — `AdminRepository.
+uploadOriginalPaperFile` uploads this same file as the paper's
+`source_file_url`, and the original must remain viewable to users
+alongside the transcribed content (the app's original-paper-viewer
+screen), not be discarded once transcription is done.
+
+Current pipeline, and what each step actually is today:
+
+1. **SOURCE** — the scanned PDF/images above. Nothing automated yet.
+2. **OCR** — **manual today**: a human transcribes the source into the
+   JSON shape below by reading the scan directly, or runs any OCR tool
+   of their own choice and proofreads its output — this repository does
+   not ship or endorse a specific OCR tool. Do not treat OCR output as
+   authoritative without a human proofread; that's exactly what
+   `quality_status: OCR_UNCERTAIN` (with a `quality_note` explaining the
+   uncertainty) exists for in the JSON shape below.
+3. **NORMALIZE** — while transcribing, apply this guide's JSON shape
+   exactly (field names, allowed enum values, no year field) rather than
+   inventing a different structure per paper.
+4. **PARSE** — not a separate tool call; producing the JSON *is* the
+   parse step, done by the human transcriber.
+5. **VALIDATE** → **QUALITY CHECK** → **ADMIN REVIEW** → **VERIFY** →
+   **PUBLISH** — these are exactly "Step 1" through "Step 4" below,
+   already implemented and unchanged by this section.
+
+If an OCR/parsing tool is added later, it plugs in as a new script under
+`scripts/` producing the same JSON shape — everything downstream (steps
+3 onward here) stays exactly as documented, by design.
+
 ## Directory layout
 
 ```

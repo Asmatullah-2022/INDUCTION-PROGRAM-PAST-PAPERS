@@ -118,7 +118,7 @@ grep -rliE "pdf.*generat|generat.*pdf|printing" lib/ pubspec.yaml
 | Unit/widget tests | COMPLETED — 31 unit tests (`ai_teacher_validation_test.dart`) covering labeling, prompt validation, error mapping, action sets, practice-content/NEEDS-REVIEW rules, and the discrepancy detector; 16 widget tests (`ai_teacher_screen_test.dart`) covering empty/loading/error/retry states, question-context mode, verified-vs-AI-generated labeling, Stop Generation, New Conversation vs Clear Chat, Regenerate, discrepancy detection, and practice labeling. |
 | **Honest gaps** | `VERIFIED_ANSWER` is schema-supported but never actually produced by the current flow (the AI always explains/answers — it never emits a bare verified answer with no AI framing). Stop Generation is UI-level abandonment only, not a true network abort. No streaming responses. Live provider calls and live Supabase RLS enforcement are **not executed** in this sandbox (no real `ANTHROPIC_API_KEY`, no live Supabase project) — this is asserted from code/migration review, the same way every other RLS claim in this project has been verified, not from a live end-to-end run. |
 
-See `docs/AI_TEACHER_GUIDE.md` for the full architecture, environment variables, and deployment steps.
+See `docs/AI_TEACHER_GUIDE.md` for the full architecture, environment variables, and deployment steps, and `docs/AI_TEACHER_ARCHITECTURE.md` for the streaming evaluation (not implemented — documented why) and why a VERIFIED_ANSWER "AI-answer promotion" pipeline was deliberately not built (see also `docs/REMAINING_WORK_AUDIT.md` §2–4).
 
 ## PDF / export
 
