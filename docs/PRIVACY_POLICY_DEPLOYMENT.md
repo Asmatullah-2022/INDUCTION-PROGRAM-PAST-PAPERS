@@ -5,6 +5,36 @@ what exists in the repository and exactly what a human with hosting/
 Play Console access must do next — it does not claim any URL is live,
 because none has actually been published anywhere from this sandbox.
 
+## This session's findings — why deployment stops here, at a human boundary
+
+Inspected directly via the GitHub API this session:
+
+- **Repository**: `Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS`.
+- **Branches**: exactly one — `claude/induction-program-app-c3mfag`.
+  There is no `main`/`master` branch. This branch *is* the repository's
+  only branch, so Option A below needs no "merge to default branch"
+  step — it already is the only branch there is.
+- **GitHub Pages**: this session has no tool that can read or change a
+  repository's Pages configuration (enabling Pages is a repository
+  **Settings** action — `Settings → Pages` — that requires a human with
+  admin access to the repo; no API call for it is exposed to this
+  session). There is no evidence Pages is currently enabled, and this
+  session cannot enable it.
+- **Network egress**: this sandbox's outbound network is restricted by
+  an allowlisted proxy. A direct attempt this session to fetch
+  `https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html`
+  (to check whether Pages happened to already be live) was rejected by
+  the proxy with `EGRESS_BLOCKED` before even reaching GitHub's
+  servers. This means **even after a human enables Pages, this sandbox
+  cannot verify the resulting URL itself** — verification (§"How to
+  verify" below) must be done by the human doing the deployment, from
+  their own browser/machine, not from this session.
+
+Both of these are hard boundaries of this environment, not something a
+different prompt or another attempt would get past. This is the exact
+point at which the task stops, per the explicit instruction not to
+fabricate a deployment or a URL.
+
 ## What exists right now
 
 | File | Purpose |
@@ -26,23 +56,38 @@ to open the policy from a web browser, before ever installing the app.
 
 ### Option A — GitHub Pages (recommended: zero new service, repo is already on GitHub)
 
-1. Merge/land this branch's `privacy-policy.html` and `.nojekyll` onto
-   the repository's default branch (GitHub Pages serves from a branch
-   you choose in step 2 — it does not serve directly from a feature
-   branch by default).
-2. In the GitHub repository: **Settings → Pages → Build and deployment
-   → Source: "Deploy from a branch"** → **Branch: `main`** (or whichever
-   is the default branch) → **Folder: `/ (root)`** → Save.
-3. Wait for the "pages build and deployment" GitHub Action to finish
-   (Settings → Pages will show a green "Your site is live at ..." banner
-   once done — this can take a minute or two).
-4. The resulting public URL will be:
+For this exact repository (`Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS`),
+which currently has only one branch:
+
+1. Go to **github.com/Asmatullah-2022/INDUCTION-PROGRAM-PAST-PAPERS →
+   Settings → Pages**. (Requires being signed in as the repo owner or
+   an admin collaborator — this is the human-only step this session
+   cannot perform.)
+2. Under **Build and deployment → Source**, choose **"Deploy from a
+   branch"**.
+3. Under **Branch**, choose **`claude/induction-program-app-c3mfag`**
+   (this repository's only branch today) and **Folder: `/ (root)`**,
+   then **Save**.
+   - If, by the time you do this, the work has been merged into a
+     `main` branch instead, choose `main` there rather than this
+     branch — use whichever branch is actually the repository's default
+     at deployment time.
+4. Wait for the "pages build and deployment" GitHub Action to finish —
+   Settings → Pages will show a green "Your site is live at ..." banner
+   once done (usually under a minute).
+5. **The resulting URL will be exactly:**
    ```
-   https://<github-username-or-org>.github.io/<repository-name>/privacy-policy.html
+   https://asmatullah-2022.github.io/INDUCTION-PROGRAM-PAST-PAPERS/privacy-policy.html
    ```
-   (Replace `<github-username-or-org>` and `<repository-name>` with the
-   real values for this repository — this document cannot know them
-   from inside the sandbox, and they must not be guessed or invented.)
+   This is a deterministic consequence of GitHub Pages' own URL scheme
+   for this specific, already-known repository owner/name — it is
+   **not yet live**, and this session could not verify it even after
+   you enable Pages (see "This session's findings" above: outbound
+   access to `*.github.io` is blocked from this sandbox). **You must
+   verify it yourself** — open it in a real browser, or run the `curl`
+   command in "How to verify" below from your own machine — before
+   treating it as real and before entering it anywhere in Play Console
+   or replacing any `PRIVACY_POLICY_URL_REQUIRED` placeholder with it.
 
 **Known tradeoff of this option, stated plainly**: choosing "root" as
 the Pages folder publishes the *entire* repository's tracked files as
@@ -112,18 +157,28 @@ explicitly asks for one.
 
 ## What remains blocked until deployment
 
+- **Enabling GitHub Pages itself** — requires a human with admin access
+  to the repository's Settings; no tool available to this session can
+  do this. This is the actual, current blocker — everything else in
+  this document is ready and waiting on this one manual step.
+- **Verifying the resulting URL** — even after Pages is enabled, this
+  sandbox's network egress cannot reach `*.github.io` (confirmed this
+  session — see "This session's findings" above), so verification must
+  happen from the deploying human's own browser/machine, not from a
+  future session running in this same sandbox either.
 - **Play Store submission itself** — cannot be finalized without a
-  real, live Privacy Policy URL entered in Console. Every other
-  Play Store checklist item in `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
-  can proceed independently of this one, but the listing as a whole
-  cannot be submitted without it.
+  real, live, human-verified Privacy Policy URL entered in Console.
+  Every other Play Store checklist item in `docs/
+  PLAY_STORE_RELEASE_CHECKLIST.md` can proceed independently of this
+  one, but the listing as a whole cannot be submitted without it.
 - **`docs/PLAY_STORE_RELEASE_CHECKLIST.md` and `docs/PLAY_STORE_LISTING.md`**
   both reference the literal placeholder `PRIVACY_POLICY_URL_REQUIRED`
   wherever the real URL belongs — replace every occurrence of that
-  exact string with the real deployed URL once one of the options above
-  has actually been carried out, and only then.
+  exact string with the real, human-verified deployed URL once the
+  steps above have actually been carried out, and only then. Do not
+  replace it based on the deterministic URL formula in Option A step 5
+  alone — that formula is correct but unverified until a human opens it.
 - **A live-browser mobile-friendliness check** — the CSS was written to
   be mobile-friendly and reviewed by reading it, but was not opened in
-  an actual browser from this sandbox (no browser-with-network-access
-  tool was used to load a URL that doesn't exist yet); do this once
-  deployed, per "How to verify" above.
+  an actual browser from this sandbox; do this once deployed, per "How
+  to verify" above, from the deploying human's own device.

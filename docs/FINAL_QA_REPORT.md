@@ -1,6 +1,32 @@
 # Final QA Report
 
-Run results as of the latest pass (**Privacy Policy hosting**), on top
+## Latest pass: Privacy Policy deployment attempt — stopped at a human boundary
+
+This session inspected the repository via the GitHub API and confirmed
+two hard blockers to actually deploying `privacy-policy.html`, neither
+fixable by retrying or by a different approach in this sandbox:
+
+1. **No tool available to this session can enable GitHub Pages** —
+   that is a repository **Settings** action requiring human admin
+   access; nothing exposed to this session can read or change it.
+2. **This sandbox's network egress cannot reach `*.github.io`** —
+   confirmed by a direct attempt this session (rejected with
+   `EGRESS_BLOCKED` before reaching GitHub). Even if a human enables
+   Pages, this sandbox could not verify the resulting URL either.
+
+**No deployment was performed. No URL is being reported as real or
+live.** `docs/PRIVACY_POLICY_DEPLOYMENT.md` was updated with these
+exact findings and the precise manual steps for a human with repo
+admin access to finish this — see "This session's findings" in that
+file. No `PRIVACY_POLICY_URL_REQUIRED` placeholder was replaced,
+because no real, human-verified URL exists yet. No Flutter code was
+changed this pass (nothing needed to change — the in-app screens
+correctly point at the in-app `/privacy` route, which is independent of
+the external hosted URL).
+
+---
+
+Run results as of the prior pass (**Privacy Policy hosting**), on top
 of every prior pass: N+1/pagination hardening, AI Teacher, the
 production-readiness audit, and the Downloads Manager. This pass added
 a production-ready static Privacy Policy page and wired its in-app
